@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ExamPrep — JEE & NEET Preparation</title>
+  <meta name="description" content="India's best JEE Main, JEE Advanced and NEET preparation platform with PYQs, DPPs, Mock Tests and detailed solutions.">
+  <meta name="theme-color" content="#1a237e">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
+  <nav id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">EP</div>
+      <div class="logo-text"><span>Exam</span>Prep</div>
+    </div>
+
+    <div class="sidebar-nav">
+      <div class="nav-section-label">Main</div>
+      <button class="nav-item" data-route="#home"    onclick="navigate('#home')">    <span class="nav-icon">🏠</span> Home</button>
+      <button class="nav-item" data-route="#news"    onclick="navigate('#news')">    <span class="nav-icon">📰</span> News &amp; Updates</button>
+
+      <div class="nav-section-label" style="margin-top:8px;">Free PYQs</div>
+      <button class="nav-item" data-route="#pyq"     onclick="navigate('#pyq')">     <span class="nav-icon">📚</span> Solved PYQs</button>
+
+      <div class="nav-section-label" style="margin-top:8px;">Premium</div>
+      <button class="nav-item" data-route="#premium" onclick="navigate('#premium')"> <span class="nav-icon">⭐</span> Premium Content</button>
+      <button class="nav-item" data-route="#subscription" id="nav-subscription" onclick="navigate('#subscription')"><span class="nav-icon">💳</span> Get Premium</button>
+
+      <div class="nav-section-label" style="margin-top:8px;">My Account</div>
+      <button class="nav-item" data-route="#dashboard" id="nav-dashboard" onclick="navigate('#dashboard')"><span class="nav-icon">📊</span> Dashboard</button>
+      <button class="nav-item" data-route="#leaderboard" onclick="navigate('#leaderboard')"><span class="nav-icon">🏅</span> Leaderboard</button>
+      <button class="nav-item" data-route="#library" id="nav-library" onclick="navigate('#library')"><span class="nav-icon">📂</span> My Library</button>
+
+      <div class="nav-section-label" style="margin-top:8px;">Auth</div>
+      <button class="nav-item" data-route="#login"    id="nav-login"    onclick="navigate('#login')">   <span class="nav-icon">🔑</span> Login</button>
+      <button class="nav-item" data-route="#register" id="nav-register" onclick="navigate('#register')"><span class="nav-icon">✨</span> Register</button>
+      <button class="nav-item"                        id="nav-logout"   onclick="doLogout()">           <span class="nav-icon">🚪</span> Logout</button>
+      <button class="nav-item" data-route="#admin"    id="nav-admin"    onclick="navigate('#admin')">   <span class="nav-icon">⚙️</span> Admin</button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:.78rem;color:var(--text3);">Dark Mode</span>
+        <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()"></button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Main ────────────────────────────────────────────────────────────── -->
+  <main id="main">
+    <div id="topbar">
+      <button class="btn-icon" id="menu-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+      <span class="topbar-title" id="topbar-title">ExamPrep</span>
+      <div class="topbar-actions">
+        <div id="topbar-user"></div>
+        <button class="btn btn-primary btn-sm" id="topbar-premium-btn" onclick="navigate('#subscription')" style="display:none;">⭐ Go Premium</button>
+      </div>
+    </div>
+
+    <div id="page-content"></div>
+  </main>
+</div>
+
+<!-- ── Exam Engine Overlay ─────────────────────────────────────────────────── -->
+<div id="exam-screen"><!-- Built dynamically by exam_engine.js --></div>
+
+<!-- ── OMR Overlay ────────────────────────────────────────────────────────── -->
+<div id="omr-overlay">
+  <div class="omr-sheet">
+    <div id="omr-sheet-body"><!-- Built dynamically by omr.js --></div>
+  </div>
+</div>
+
+<!-- ── Generic Modal ──────────────────────────────────────────────────────── -->
+<div id="modal-backdrop" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">Modal</h3>
+      <button class="btn-icon" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast Container ────────────────────────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<!-- ── Offline Banner ─────────────────────────────────────────────────────── -->
+<div id="offline-indicator" class="offline-indicator">📵 You're offline — answers are queued</div>
+
+<!-- ── Scripts ────────────────────────────────────────────────────────────── -->
+<script src="./assets/js/api.js"></script>
+<script src="./assets/js/router.js"></script>
+<script src="./assets/js/auth.js"></script>
+<script src="./assets/js/exam_engine.js"></script>
+<script src="./assets/js/omr.js"></script>
+<script src="./assets/js/pyq_browse.js"></script>
+<script src="./assets/js/premium.js"></script>
+<script src="./assets/js/dashboard.js"></script>
+<script src="./assets/js/leaderboard.js"></script>
+<script src="./assets/js/subscription.js"></script>
+<script src="./assets/js/news.js"></script>
+<script src="./assets/js/library.js"></script>
+<script src="./assets/js/admin.js"></script>
+
+<script>
+/* ── App boot ───────────────────────────────────────────────────────────── */
+
+// Route registrations
+registerRoute('#home',         renderHome);
+registerRoute('#pyq',          renderPyq);
+registerRoute('#premium',      renderPremium);
+registerRoute('#leaderboard',  renderLeaderboard);
+registerRoute('#dashboard',    renderDashboard);
+registerRoute('#news',         renderNews);
+registerRoute('#library',      renderLibrary);
+registerRoute('#subscription', renderSubscription);
+registerRoute('#admin',        renderAdmin);
+registerRoute('#login',        renderLogin);
+registerRoute('#register',     renderRegister);
+
+// Home page
+async function renderHome(container) {
+  const user = Auth.getUser();
+  let myRank = null;
+  try { if (Auth.isLoggedIn()) myRank = await LbAPI.myRank(); } catch {}
+
+  container.innerHTML = `
+    <div class="home-hero fade-in">
+      <div class="hero-title">
+        ${user ? `Welcome back, ${user.full_name || user.email.split('@')[0]} 👋` : 'Master JEE & NEET 🚀'}
+      </div>
+      <div class="hero-sub">
+        ${user
+          ? 'Pick up where you left off. Your next breakthrough is one test away.'
+          : 'India\'s most comprehensive exam prep platform. Solved PYQs, DPPs, Mock Tests and detailed solutions.'}
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary btn-lg" onclick="navigate('#pyq')">📚 Browse PYQs</button>
+        <button class="btn btn-lg" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);" onclick="navigate('#premium')">⭐ Premium Content</button>
+        ${!user ? '<button class="btn btn-lg" style="background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);" onclick="navigate(\'#register\')">Create Free Account</button>' : ''}
+      </div>
+    </div>
+
+    ${myRank ? `
+    <div class="my-rank-card" style="margin-bottom:24px;">
+      <div><div class="my-rank-main">#${myRank.overall_rank??'—'}</div><div class="my-rank-label">Your Rank</div></div>
+      <div><div style="font-size:1.3rem;font-weight:800;">🔥 ${myRank.streak_days??0}</div><div class="my-rank-label">Streak</div></div>
+      <div><div style="font-size:1.3rem;font-weight:800;">${myRank.total_questions??0}</div><div class="my-rank-label">Solved</div></div>
+      <button class="btn btn-sm" style="margin-left:auto;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);" onclick="navigate('#dashboard')">My Dashboard →</button>
+    </div>` : ''}
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">Exams Covered</div></div>
+      <div class="stat-card"><div class="stat-value">2020–24</div><div class="stat-label">Years Available</div></div>
+      <div class="stat-card"><div class="stat-value">100+</div><div class="stat-label">Question Sets</div></div>
+      <div class="stat-card"><div class="stat-value">Free</div><div class="stat-label">PYQ Access</div></div>
+    </div>
+
+    <div style="margin-bottom:28px;">
+      <div class="section-title" style="margin-bottom:16px;">Quick Access</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">
+        ${[
+          ['📝','JEE Main PYQs','pyq','All shifts 2020–2024','#pyq'],
+          ['🎯','JEE Advanced','pyq','Paper 1 & Paper 2','#pyq'],
+          ['🏥','NEET UG','pyq','Biology, Physics, Chemistry','#pyq'],
+          ['📋','DPP Sets','premium','Chapterwise practice','#premium'],
+          ['🏆','Mock Tests','premium','Full syllabus tests','#premium'],
+          ['🏅','Leaderboard','lb','See where you stand','#leaderboard'],
+        ].map(([icon,title,type,sub,route]) => `
+          <div class="card card-hover fade-in" onclick="navigate('${route}')">
+            <div style="font-size:1.8rem;margin-bottom:8px;">${icon}</div>
+            <div style="font-weight:700;font-size:.9rem;margin-bottom:3px;">${title}</div>
+            <div style="font-size:.78rem;color:var(--text3);">${sub}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title" style="margin-bottom:14px;">📰 Latest News</div>
+      <div id="home-news"><div class="spinner" style="width:24px;height:24px;border-width:2px;"></div></div>
+    </div>`;
+
+  // Load news preview
+  NewsAPI.list().then(items => {
+    const el = document.getElementById('home-news');
+    if (!el) return;
+    el.innerHTML = items.slice(0,3).map(n => `
+      <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="font-weight:600;font-size:.88rem;">${n.title}</div>
+        <div style="font-size:.76rem;color:var(--text3);margin-top:2px;">${new Date(n.published_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+      </div>`).join('') + '<div style="text-align:right;margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="navigate(\'#news\')">All News →</button></div>';
+  }).catch(()=>{});
+}
+
+// Theme
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const next   = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  document.getElementById('theme-btn').classList.toggle('on', next === 'dark');
+  localStorage.setItem('ep_theme', next);
+}
+
+// Sidebar
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  if (window.innerWidth <= 900) {
+    sidebar.classList.toggle('mobile-open');
+  } else {
+    sidebar.classList.toggle('collapsed');
+    document.getElementById('main').classList.toggle('full-width');
+  }
+}
+
+// Close mobile sidebar on outside click
+document.addEventListener('click', e => {
+  if (window.innerWidth <= 900) {
+    const sidebar = document.getElementById('sidebar');
+    if (!e.target.closest('#sidebar') && !e.target.closest('#menu-btn') && sidebar.classList.contains('mobile-open')) {
+      sidebar.classList.remove('mobile-open');
+    }
+  }
+});
+
+// Toast
+function showToast(msg, type = 'info', duration = 3500) {
+  const container = document.getElementById('toast-container');
+  const toast     = document.createElement('div');
+  toast.className = `toast ${type}`;
+  const icons     = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
+  toast.innerHTML = `<span>${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity='0'; toast.style.transform='translateX(40px)'; toast.style.transition='.3s ease'; setTimeout(()=>toast.remove(), 300); }, duration);
+}
+
+// Modal
+function openModal(title, bodyHTML, footerHTML) {
+  document.getElementById('modal-title').textContent  = title;
+  document.getElementById('modal-body').innerHTML     = bodyHTML;
+  document.getElementById('modal-footer').innerHTML   = footerHTML || '<button class="btn btn-secondary" onclick="closeModal()">Close</button>';
+  document.getElementById('modal-backdrop').classList.add('active');
+}
+function closeModal() {
+  document.getElementById('modal-backdrop').classList.remove('active');
+}
+
+// Close modal on backdrop click
+document.getElementById('modal-backdrop').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-backdrop')) closeModal();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeModal();
+    if (document.getElementById('omr-overlay').classList.contains('active')) OMR.close();
+  }
+});
+
+// Boot
+(function boot() {
+  const theme = localStorage.getItem('ep_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('theme-btn').classList.toggle('on', theme === 'dark');
+
+  updateAuthUI();
+
+  const user = Auth.getUser();
+  if (user && !user.is_premium) {
+    document.getElementById('topbar-premium-btn').style.display = 'inline-flex';
+  }
+
+  // Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'FLUSH_OFFLINE_QUEUE') OfflineQueue.flush();
+    });
+  }
+
+  // Try to keep user premium state fresh
+  if (Auth.isLoggedIn()) {
+    AuthAPI.me().then(me => { Auth.setUser(me); updateAuthUI(); }).catch(() => {});
+  }
+
+  initRouter();
+})();
+</script>
+</body>
+</html>
