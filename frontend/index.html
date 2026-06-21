@@ -1,299 +1,433 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ExamPrep — JEE & NEET Preparation</title>
-  <meta name="description" content="India's best JEE Main, JEE Advanced and NEET preparation platform with PYQs, DPPs, Mock Tests and detailed solutions.">
-  <meta name="theme-color" content="#1a237e">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ExamPrep — JEE & NEET</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./assets/css/style.css">
 </head>
 <body>
+<div id="offline-bar">You are offline. Answers are queued and will sync automatically.</div>
 <div id="app">
-  <!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
   <nav id="sidebar">
-    <div class="sidebar-logo">
-      <div class="logo-icon">EP</div>
-      <div class="logo-text"><span>Exam</span>Prep</div>
+    <div class="sidebar-brand">
+      <div class="brand-mark">EP</div>
+      <div class="brand-name"><span>Exam</span>Prep</div>
     </div>
-
-    <div class="sidebar-nav">
-      <div class="nav-section-label">Main</div>
-      <button class="nav-item" data-route="#home"    onclick="navigate('#home')">    <span class="nav-icon">🏠</span> Home</button>
-      <button class="nav-item" data-route="#news"    onclick="navigate('#news')">    <span class="nav-icon">📰</span> News &amp; Updates</button>
-
-      <div class="nav-section-label" style="margin-top:8px;">Free PYQs</div>
-      <button class="nav-item" data-route="#pyq"     onclick="navigate('#pyq')">     <span class="nav-icon">📚</span> Solved PYQs</button>
-
-      <div class="nav-section-label" style="margin-top:8px;">Premium</div>
-      <button class="nav-item" data-route="#premium" onclick="navigate('#premium')"> <span class="nav-icon">⭐</span> Premium Content</button>
-      <button class="nav-item" data-route="#subscription" id="nav-subscription" onclick="navigate('#subscription')"><span class="nav-icon">💳</span> Get Premium</button>
-
-      <div class="nav-section-label" style="margin-top:8px;">My Account</div>
-      <button class="nav-item" data-route="#dashboard" id="nav-dashboard" onclick="navigate('#dashboard')"><span class="nav-icon">📊</span> Dashboard</button>
-      <button class="nav-item" data-route="#leaderboard" onclick="navigate('#leaderboard')"><span class="nav-icon">🏅</span> Leaderboard</button>
-      <button class="nav-item" data-route="#library" id="nav-library" onclick="navigate('#library')"><span class="nav-icon">📂</span> My Library</button>
-
-      <div class="nav-section-label" style="margin-top:8px;">Auth</div>
-      <button class="nav-item" data-route="#login"    id="nav-login"    onclick="navigate('#login')">   <span class="nav-icon">🔑</span> Login</button>
-      <button class="nav-item" data-route="#register" id="nav-register" onclick="navigate('#register')"><span class="nav-icon">✨</span> Register</button>
-      <button class="nav-item"                        id="nav-logout"   onclick="doLogout()">           <span class="nav-icon">🚪</span> Logout</button>
-      <button class="nav-item" data-route="#admin"    id="nav-admin"    onclick="navigate('#admin')">   <span class="nav-icon">⚙️</span> Admin</button>
+    <div class="sidebar-body">
+      <div class="nav-group">
+        <div class="nav-group-label">Overview</div>
+        <button class="nav-item" data-page="home" onclick="go('home')">
+          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
+        </button>
+        <button class="nav-item" data-page="news" onclick="go('news')">
+          <svg viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/></svg>News
+        </button>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Study</div>
+        <button class="nav-item" data-page="pyq" onclick="go('pyq')">
+          <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>Solved PYQs
+        </button>
+        <button class="nav-item" data-page="premium" onclick="go('premium')">
+          <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Premium Content
+          <span id="nav-pro-badge" class="nav-badge" style="display:none">PRO</span>
+        </button>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Progress</div>
+        <button class="nav-item" data-page="dashboard" onclick="go('dashboard')" id="nav-dashboard" style="display:none">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard
+        </button>
+        <button class="nav-item" data-page="leaderboard" onclick="go('leaderboard')">
+          <svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Leaderboard
+        </button>
+        <button class="nav-item" data-page="library" onclick="go('library')" id="nav-library" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>My Library
+        </button>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Account</div>
+        <button class="nav-item" data-page="subscription" onclick="go('subscription')" id="nav-plans">
+          <svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Get Premium
+        </button>
+        <button class="nav-item" data-page="login" onclick="go('login')" id="nav-login">
+          <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>Login
+        </button>
+        <button class="nav-item" onclick="doLogout()" id="nav-logout" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>Logout
+        </button>
+        <button class="nav-item" data-page="admin" onclick="go('admin')" id="nav-admin" style="display:none">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M2 12h2M20 12h2M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41"/></svg>Admin
+        </button>
+      </div>
     </div>
-
     <div class="sidebar-footer">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:.78rem;color:var(--text3);">Dark Mode</span>
-        <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()"></button>
+      <div class="theme-row">
+        <span class="theme-label">Dark mode</span>
+        <button class="toggle-switch" id="theme-toggle" onclick="toggleTheme()"></button>
       </div>
     </div>
   </nav>
-
-  <!-- ── Main ────────────────────────────────────────────────────────────── -->
-  <main id="main">
+  <div id="main">
     <div id="topbar">
-      <button class="btn-icon" id="menu-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+      <button class="topbar-menu-btn" onclick="toggleSidebar()">
+        <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <span class="topbar-title" id="topbar-title">ExamPrep</span>
-      <div class="topbar-actions">
-        <div id="topbar-user"></div>
-        <button class="btn btn-primary btn-sm" id="topbar-premium-btn" onclick="navigate('#subscription')" style="display:none;">⭐ Go Premium</button>
+      <div class="topbar-right" id="topbar-right"></div>
+    </div>
+    <div id="page-content"></div>
+  </div>
+</div>
+<div id="exam-overlay"></div>
+<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-head-title" id="modal-title"></span>
+      <button class="btn-icon" onclick="closeModal()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div id="modal-body"></div>
+    <div class="modal-foot" id="modal-foot"></div>
+  </div>
+</div>
+<div id="toast-wrap"></div>
+
+<script>
+'use strict';
+// ╔══════════════════════════════════════════════════╗
+// ║  CORE — API, AUTH, ROUTER, UI HELPERS            ║
+// ╚══════════════════════════════════════════════════╝
+
+const Auth = {
+  token:  () => localStorage.getItem('ep_tok'),
+  user:   () => { try { return JSON.parse(localStorage.getItem('ep_usr') || 'null'); } catch { return null; } },
+  set:    (tok, usr) => { localStorage.setItem('ep_tok', tok); localStorage.setItem('ep_usr', JSON.stringify(usr)); },
+  clear:  () => { localStorage.removeItem('ep_tok'); localStorage.removeItem('ep_usr'); },
+  loggedIn:  () => !!localStorage.getItem('ep_tok'),
+  isPremium: () => { try { return JSON.parse(localStorage.getItem('ep_usr') || '{}').is_premium || false; } catch { return false; } },
+  isAdmin:   () => { try { return JSON.parse(localStorage.getItem('ep_usr') || '{}').is_admin || false; } catch { return false; } },
+};
+
+async function apiFetch(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  const tok = Auth.token();
+  if (tok) headers['Authorization'] = 'Bearer ' + tok;
+  const res = await fetch(path, { ...opts, headers,
+    body: opts.body && typeof opts.body !== 'string' ? JSON.stringify(opts.body) : opts.body });
+  if (res.status === 204) return null;
+  const ct = res.headers.get('content-type') || '';
+  const data = ct.includes('json') ? await res.json() : await res.blob();
+  if (!res.ok) { const e = new Error(data?.detail || `HTTP ${res.status}`); e.status = res.status; throw e; }
+  return data;
+}
+const GET   = p      => apiFetch(p, { method: 'GET' });
+const POST  = (p, b) => apiFetch(p, { method: 'POST',  body: b });
+const PATCH = (p, b) => apiFetch(p, { method: 'PATCH', body: b });
+const PUT   = (p, b) => apiFetch(p, { method: 'PUT',   body: b });
+const DEL   = p      => apiFetch(p, { method: 'DELETE' });
+const FORM  = (p, fd)=> apiFetch(p, { method: 'POST',  body: fd, headers: {} });
+
+// Offline queue for answers
+const OQ = {
+  push: item => { const q = OQ.all(); q.push(item); localStorage.setItem('ep_oq', JSON.stringify(q)); },
+  all:  ()   => { try { return JSON.parse(localStorage.getItem('ep_oq') || '[]'); } catch { return []; } },
+  clear:()   => localStorage.removeItem('ep_oq'),
+  flush: async () => {
+    if (!navigator.onLine) return;
+    const items = OQ.all(); if (!items.length) return;
+    const failed = [];
+    for (const item of items) { try { await apiFetch(item.url, item.opts); } catch { failed.push(item); } }
+    localStorage.setItem('ep_oq', JSON.stringify(failed));
+  }
+};
+
+// Router
+const _PAGES = {};
+const _TITLES = { home:'Home', pyq:'Solved PYQs', premium:'Premium Content',
+  leaderboard:'Leaderboard', dashboard:'My Dashboard', news:'Exam News',
+  library:'My Library', subscription:'Subscription Plans', admin:'Admin Panel',
+  login:'Login', register:'Register' };
+
+function registerPage(name, fn) { _PAGES[name] = fn; }
+
+function go(page, params = {}) {
+  if (!_PAGES[page]) page = 'home';
+  history.pushState({ page, params }, '', '/' + (page === 'home' ? '' : page));
+  _render(page, params);
+}
+
+function _render(page, params = {}) {
+  const fn = _PAGES[page]; if (!fn) { go('home'); return; }
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
+  document.getElementById('topbar-title').textContent = _TITLES[page] || 'ExamPrep';
+  const cont = document.getElementById('page-content');
+  cont.innerHTML = '<div class="loading-center"><div class="spinner"></div><div class="loading-text">Loading</div></div>';
+  Promise.resolve(fn(cont, params)).catch(err => {
+    cont.innerHTML = `<div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-title">Something went wrong</div><div class="empty-sub">${err.message}</div><button class="btn btn-secondary" style="margin-top:16px" onclick="go('home')">Go Home</button></div>`;
+  });
+}
+
+window.addEventListener('popstate', e => { if (e.state?.page) _render(e.state.page, e.state.params || {}); });
+
+// Toast
+function toast(msg, type = 'info', ms = 3500) {
+  const w = document.getElementById('toast-wrap');
+  const d = document.createElement('div');
+  d.className = `toast ${type}`;
+  d.innerHTML = `<div class="toast-dot"></div><span>${msg}</span>`;
+  w.appendChild(d);
+  setTimeout(() => { d.style.opacity = '0'; d.style.transform = 'translateY(8px)'; d.style.transition = '.25s'; setTimeout(() => d.remove(), 250); }, ms);
+}
+
+// Modal
+function openModal(title, body, foot) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = body;
+  document.getElementById('modal-foot').innerHTML = foot || '<button class="btn btn-secondary" onclick="closeModal()">Close</button>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+function closeModal() { document.getElementById('modal-bg').classList.remove('open'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// Theme
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  document.getElementById('theme-toggle').classList.toggle('on', next === 'dark');
+  localStorage.setItem('ep_theme', next);
+}
+
+// Sidebar
+function toggleSidebar() {
+  const s = document.getElementById('sidebar');
+  if (window.innerWidth <= 768) { s.classList.toggle('mobile-open'); }
+  else { s.classList.toggle('hidden'); document.getElementById('main').classList.toggle('sidebar-collapsed'); }
+}
+document.addEventListener('click', e => {
+  if (window.innerWidth <= 768) {
+    const s = document.getElementById('sidebar');
+    if (s.classList.contains('mobile-open') && !e.target.closest('#sidebar') && !e.target.closest('.topbar-menu-btn'))
+      s.classList.remove('mobile-open');
+  }
+});
+
+// Auth UI
+function updateAuthUI() {
+  const u = Auth.user(), li = Auth.loggedIn(), pm = Auth.isPremium(), adm = Auth.isAdmin();
+  const show = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v ? '' : 'none'; };
+  show('nav-login', !li);
+  show('nav-logout', li);
+  show('nav-dashboard', li);
+  show('nav-library', li);
+  show('nav-admin', adm);
+  show('nav-plans', li && !pm);
+  show('nav-pro-badge', pm);
+  const tr = document.getElementById('topbar-right');
+  if (li && u) {
+    const init = (u.full_name || u.email || 'U').charAt(0).toUpperCase();
+    tr.innerHTML = `<div class="topbar-user-chip"><div class="user-avatar">${init}</div><span>${u.full_name || u.email.split('@')[0]}</span>${pm ? '<span class="premium-chip">PRO</span>' : ''}</div>${!pm ? '<button class="btn btn-primary btn-sm" onclick="go(\'subscription\')">Get Premium</button>' : ''}`;
+  } else {
+    tr.innerHTML = `<button class="btn btn-secondary btn-sm" onclick="go('login')">Login</button><button class="btn btn-primary btn-sm" onclick="go('register')">Register</button>`;
+  }
+}
+
+function requireLogin(msg) {
+  if (!Auth.loggedIn()) { toast(msg || 'Please login to continue', 'warn'); go('login'); return false; }
+  return true;
+}
+
+// Icons
+const IC = {
+  lock: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" width="13" height="13"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`,
+  play: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="currentColor" stroke-width="0" width="13" height="13"><polygon points="5 3 19 12 5 21"/></svg>`,
+  dl:   `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+  eye:  `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" width="13" height="13"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  chk:  `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>`,
+  arr:  `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" width="13" height="13"><polyline points="9 18 15 12 9 6"/></svg>`,
+};
+
+// ╔══════════════════════════════════════════════════╗
+// ║  HOME                                            ║
+// ╚══════════════════════════════════════════════════╝
+registerPage('home', async function(el) {
+  const user = Auth.user();
+  let rankHTML = '';
+  if (Auth.loggedIn()) {
+    try {
+      const r = await GET('/api/leaderboard/my-rank');
+      rankHTML = `<div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.15)">
+        <div><div style="font-size:26px;font-weight:900;color:#fff;letter-spacing:-1px">#${r.overall_rank || '—'}</div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6)">Overall Rank</div></div>
+        <div><div style="font-size:26px;font-weight:900;color:#fff;letter-spacing:-1px">${r.streak_days || 0}</div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6)">Day Streak</div></div>
+        <div><div style="font-size:26px;font-weight:900;color:#fff;letter-spacing:-1px">${r.total_questions || 0}</div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6)">Solved</div></div>
+        <div><div style="font-size:26px;font-weight:900;color:#fff;letter-spacing:-1px">${(r.composite_score || 0).toFixed(0)}</div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6)">Rating</div></div>
+      </div>`;
+    } catch {}
+  }
+
+  let news = [];
+  try { news = await GET('/api/news/'); } catch {}
+
+  el.innerHTML = `<div class="fade-in">
+    <div class="hero-banner" style="margin-bottom:24px">
+      <div class="hero-eyebrow">India's Most Comprehensive Exam Prep Platform</div>
+      <div class="hero-title">${user ? `Welcome back,<br>${user.full_name || user.email.split('@')[0]}` : 'Crack JEE & NEET<br>With Confidence'}</div>
+      <div class="hero-sub">${user ? 'Continue your preparation. Every question solved takes you one step closer.' : 'Solved PYQs from 2013 to 2024, expert DPPs, Chapterwise Tests and Full Syllabus Mocks with detailed solutions.'}</div>
+      <div class="hero-actions">
+        <button class="btn btn-primary btn-lg" onclick="go('pyq')">Browse PYQs</button>
+        <button class="btn btn-outline btn-lg" onclick="go('premium')">Premium Content</button>
+        ${!Auth.loggedIn() ? '<button class="btn btn-outline btn-lg" onclick="go(\'register\')">Free Account</button>' : ''}
+      </div>
+      ${rankHTML}
+    </div>
+
+    <div class="stat-grid" style="margin-bottom:24px">
+      <div class="stat-card"><div class="stat-val">3</div><div class="stat-lbl">Exams</div></div>
+      <div class="stat-card"><div class="stat-val">2013–24</div><div class="stat-lbl">Years Covered</div></div>
+      <div class="stat-card"><div class="stat-val">1000+</div><div class="stat-lbl">Questions</div></div>
+      <div class="stat-card"><div class="stat-val">Free</div><div class="stat-lbl">PYQ Access</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:20px" id="home-grid">
+      <div>
+        <div style="font-size:14px;font-weight:800;color:var(--c-text);margin-bottom:12px;letter-spacing:-.3px">Quick Access</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:24px" id="quick-grid">
+          ${[['JEE Main PYQs','All shifts 2013–2024','pyq'],['JEE Advanced','Paper 1 and Paper 2','pyq'],['NEET UG','Biology, Physics, Chemistry','pyq'],['DPP Practice','Chapterwise daily problems','premium'],['Mock Tests','Full syllabus simulation','premium'],['Leaderboard','See where you stand','leaderboard']].map(([t,s,p]) => `
+          <div class="card card-hover" onclick="go('${p}')">
+            <div class="card-body" style="padding:14px">
+              <div style="font-size:12px;font-weight:700;color:var(--c-text);margin-bottom:3px">${t}</div>
+              <div style="font-size:11px;color:var(--c-text4)">${s}</div>
+              <div style="margin-top:8px;color:var(--c-blue);display:flex;align-items:center;gap:3px;font-size:11px;font-weight:600">${IC.arr}Open</div>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div>
+        <div style="font-size:14px;font-weight:800;color:var(--c-text);margin-bottom:12px;letter-spacing:-.3px">Latest Updates</div>
+        <div class="card">
+          <div class="card-body" style="padding:0 16px">
+            ${news.slice(0,4).map(n => `<div style="padding:12px 0;border-bottom:1px solid var(--c-border)">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                <span class="badge ${n.exam_type === 'JEE_MAIN' ? 'badge-blue' : n.exam_type === 'NEET' ? 'badge-green' : n.exam_type === 'JEE_ADVANCED' ? 'badge-purple' : 'badge-gray'}">${(n.exam_type || 'General').replace('_',' ')}</span>
+                <span style="font-size:10px;color:var(--c-text4)">${new Date(n.published_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>
+              </div>
+              <div style="font-size:12px;font-weight:600;color:var(--c-text);line-height:1.4">${n.title}</div>
+            </div>`).join('') || '<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--c-text4)">No news yet</div>'}
+            ${news.length ? `<div style="padding:10px 0"><button class="btn btn-secondary btn-sm" style="width:100%" onclick="go('news')">View All Updates</button></div>` : ''}
+          </div>
+        </div>
       </div>
     </div>
+  </div>`;
 
-    <div id="page-content"></div>
-  </main>
-</div>
+  // Responsive
+  if (window.innerWidth < 900) document.getElementById('home-grid').style.gridTemplateColumns = '1fr';
+  if (window.innerWidth < 560) document.getElementById('quick-grid').style.gridTemplateColumns = '1fr 1fr';
+});
 
-<!-- ── Exam Engine Overlay ─────────────────────────────────────────────────── -->
-<div id="exam-screen"><!-- Built dynamically by exam_engine.js --></div>
-
-<!-- ── OMR Overlay ────────────────────────────────────────────────────────── -->
-<div id="omr-overlay">
-  <div class="omr-sheet">
-    <div id="omr-sheet-body"><!-- Built dynamically by omr.js --></div>
-  </div>
-</div>
-
-<!-- ── Generic Modal ──────────────────────────────────────────────────────── -->
-<div id="modal-backdrop" class="modal-backdrop">
-  <div class="modal">
-    <div class="modal-header">
-      <h3 id="modal-title">Modal</h3>
-      <button class="btn-icon" onclick="closeModal()">✕</button>
+// ╔══════════════════════════════════════════════════╗
+// ║  AUTH                                            ║
+// ╚══════════════════════════════════════════════════╝
+registerPage('login', function(el) {
+  el.innerHTML = `<div class="auth-split fade-in" style="min-height:calc(100vh - 56px)">
+    <div class="auth-left">
+      <div class="auth-left-title">Prepare Smarter.<br>Score Higher.</div>
+      <div class="auth-left-sub">Join thousands of JEE and NEET aspirants using ExamPrep to sharpen their skills with real past papers and expert-crafted content.</div>
+      <div class="auth-feature-list">${['Free access to all PYQs from 2013–2024','Detailed step-by-step solutions','Premium DPPs and chapterwise tests','Real exam interface with timer','Performance dashboard and leaderboard'].map(f => `<div class="auth-feature"><div class="auth-feature-dot"></div>${f}</div>`).join('')}</div>
     </div>
-    <div class="modal-body" id="modal-body"></div>
-    <div class="modal-footer" id="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+    <div class="auth-right"><div class="auth-form-wrap">
+      <div class="auth-title">Sign in to your account</div>
+      <div class="auth-sub">New here? <a href="#" onclick="go('register');return false">Create a free account</a></div>
+      <div id="l-err" style="display:none;background:var(--c-red-l);color:var(--c-red);padding:10px 14px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;margin-bottom:14px;border-left:3px solid var(--c-red)"></div>
+      <div class="form-group"><label class="form-label">Email address</label><input id="l-email" type="email" class="form-control" placeholder="you@example.com" autocomplete="email"></div>
+      <div class="form-group"><label class="form-label">Password</label><input id="l-pass" type="password" class="form-control" placeholder="Your password" autocomplete="current-password" onkeyup="if(event.key==='Enter')doLogin()"></div>
+      <button id="login-btn" class="btn btn-primary btn-lg" style="width:100%;margin-top:4px" onclick="doLogin()">Sign In</button>
+      <p style="text-align:center;margin-top:20px;font-size:11px;color:var(--c-text4)">Demo: admin@examprep.in / admin123</p>
+    </div></div>
+  </div>`;
+});
+
+async function doLogin() {
+  const em = document.getElementById('l-email').value.trim();
+  const pw = document.getElementById('l-pass').value;
+  const errEl = document.getElementById('l-err');
+  const btn = document.getElementById('login-btn');
+  if (!em || !pw) { errEl.textContent = 'Please enter email and password.'; errEl.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Signing in...';
+  try {
+    const d = await POST('/api/auth/login', { email: em, password: pw });
+    Auth.set(d.access_token, d.user);
+    updateAuthUI();
+    toast('Welcome back!', 'ok');
+    go('home');
+  } catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Sign In'; }
+}
+
+registerPage('register', function(el) {
+  el.innerHTML = `<div class="auth-split fade-in" style="min-height:calc(100vh - 56px)">
+    <div class="auth-left">
+      <div class="auth-left-title">Start Your Journey<br>to Success.</div>
+      <div class="auth-left-sub">Create your free account and get instant access to thousands of solved PYQs with detailed solutions.</div>
+      <div class="auth-feature-list">${['No credit card required for free access','Instant PYQ access after registration','Track performance with personal dashboard','Compete on the leaderboard','Unlock premium for DPPs and mocks'].map(f => `<div class="auth-feature"><div class="auth-feature-dot"></div>${f}</div>`).join('')}</div>
     </div>
-  </div>
-</div>
+    <div class="auth-right"><div class="auth-form-wrap">
+      <div class="auth-title">Create your account</div>
+      <div class="auth-sub">Already registered? <a href="#" onclick="go('login');return false">Sign in</a></div>
+      <div id="r-err" style="display:none;background:var(--c-red-l);color:var(--c-red);padding:10px 14px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;margin-bottom:14px;border-left:3px solid var(--c-red)"></div>
+      <div class="form-group"><label class="form-label">Full name</label><input id="r-name" type="text" class="form-control" placeholder="Your full name"></div>
+      <div class="form-group"><label class="form-label">Email address</label><input id="r-email" type="email" class="form-control" placeholder="you@example.com"></div>
+      <div class="form-group"><label class="form-label">Password</label><input id="r-pass" type="password" class="form-control" placeholder="At least 6 characters" onkeyup="if(event.key==='Enter')doRegister()"></div>
+      <button id="reg-btn" class="btn btn-primary btn-lg" style="width:100%;margin-top:4px" onclick="doRegister()">Create Free Account</button>
+    </div></div>
+  </div>`;
+});
 
-<!-- ── Toast Container ────────────────────────────────────────────────────── -->
-<div id="toast-container"></div>
+async function doRegister() {
+  const nm = document.getElementById('r-name').value.trim();
+  const em = document.getElementById('r-email').value.trim();
+  const pw = document.getElementById('r-pass').value;
+  const errEl = document.getElementById('r-err');
+  const btn = document.getElementById('reg-btn');
+  if (!em || !pw) { errEl.textContent = 'Email and password are required.'; errEl.style.display = 'block'; return; }
+  if (pw.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; errEl.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Creating account...';
+  try {
+    const d = await POST('/api/auth/register', { email: em, password: pw, full_name: nm || undefined });
+    Auth.set(d.access_token, d.user);
+    updateAuthUI();
+    toast('Account created! Welcome.', 'ok');
+    go('home');
+  } catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Create Free Account'; }
+}
 
-<!-- ── Offline Banner ─────────────────────────────────────────────────────── -->
-<div id="offline-indicator" class="offline-indicator">📵 You're offline — answers are queued</div>
+function doLogout() { Auth.clear(); updateAuthUI(); toast('Logged out.', 'info'); go('home'); }
+</script>
 
-<!-- ── Scripts ────────────────────────────────────────────────────────────── -->
-<script src="./assets/js/api.js"></script>
-<script src="./assets/js/router.js"></script>
-<script src="./assets/js/auth.js"></script>
-<script src="./assets/js/exam_engine.js"></script>
-<script src="./assets/js/omr.js"></script>
+<!-- ═══ PAGE MODULES ═══ -->
 <script src="./assets/js/pyq_browse.js"></script>
 <script src="./assets/js/premium.js"></script>
-<script src="./assets/js/dashboard.js"></script>
+<script src="./assets/js/exam_engine.js"></script>
+<script src="./assets/js/omr.js"></script>
 <script src="./assets/js/leaderboard.js"></script>
+<script src="./assets/js/dashboard.js"></script>
 <script src="./assets/js/subscription.js"></script>
 <script src="./assets/js/news.js"></script>
 <script src="./assets/js/library.js"></script>
 <script src="./assets/js/admin.js"></script>
 
 <script>
-/* ── App boot ───────────────────────────────────────────────────────────── */
-
-// Route registrations
-registerRoute('#home',         renderHome);
-registerRoute('#pyq',          renderPyq);
-registerRoute('#premium',      renderPremium);
-registerRoute('#leaderboard',  renderLeaderboard);
-registerRoute('#dashboard',    renderDashboard);
-registerRoute('#news',         renderNews);
-registerRoute('#library',      renderLibrary);
-registerRoute('#subscription', renderSubscription);
-registerRoute('#admin',        renderAdmin);
-registerRoute('#login',        renderLogin);
-registerRoute('#register',     renderRegister);
-
-// Home page
-async function renderHome(container) {
-  const user = Auth.getUser();
-  let myRank = null;
-  try { if (Auth.isLoggedIn()) myRank = await LbAPI.myRank(); } catch {}
-
-  container.innerHTML = `
-    <div class="home-hero fade-in">
-      <div class="hero-title">
-        ${user ? `Welcome back, ${user.full_name || user.email.split('@')[0]} 👋` : 'Master JEE & NEET 🚀'}
-      </div>
-      <div class="hero-sub">
-        ${user
-          ? 'Pick up where you left off. Your next breakthrough is one test away.'
-          : 'India\'s most comprehensive exam prep platform. Solved PYQs, DPPs, Mock Tests and detailed solutions.'}
-      </div>
-      <div class="hero-actions">
-        <button class="btn btn-primary btn-lg" onclick="navigate('#pyq')">📚 Browse PYQs</button>
-        <button class="btn btn-lg" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);" onclick="navigate('#premium')">⭐ Premium Content</button>
-        ${!user ? '<button class="btn btn-lg" style="background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);" onclick="navigate(\'#register\')">Create Free Account</button>' : ''}
-      </div>
-    </div>
-
-    ${myRank ? `
-    <div class="my-rank-card" style="margin-bottom:24px;">
-      <div><div class="my-rank-main">#${myRank.overall_rank??'—'}</div><div class="my-rank-label">Your Rank</div></div>
-      <div><div style="font-size:1.3rem;font-weight:800;">🔥 ${myRank.streak_days??0}</div><div class="my-rank-label">Streak</div></div>
-      <div><div style="font-size:1.3rem;font-weight:800;">${myRank.total_questions??0}</div><div class="my-rank-label">Solved</div></div>
-      <button class="btn btn-sm" style="margin-left:auto;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);" onclick="navigate('#dashboard')">My Dashboard →</button>
-    </div>` : ''}
-
-    <div class="stat-grid">
-      <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">Exams Covered</div></div>
-      <div class="stat-card"><div class="stat-value">2020–24</div><div class="stat-label">Years Available</div></div>
-      <div class="stat-card"><div class="stat-value">100+</div><div class="stat-label">Question Sets</div></div>
-      <div class="stat-card"><div class="stat-value">Free</div><div class="stat-label">PYQ Access</div></div>
-    </div>
-
-    <div style="margin-bottom:28px;">
-      <div class="section-title" style="margin-bottom:16px;">Quick Access</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">
-        ${[
-          ['📝','JEE Main PYQs','pyq','All shifts 2020–2024','#pyq'],
-          ['🎯','JEE Advanced','pyq','Paper 1 & Paper 2','#pyq'],
-          ['🏥','NEET UG','pyq','Biology, Physics, Chemistry','#pyq'],
-          ['📋','DPP Sets','premium','Chapterwise practice','#premium'],
-          ['🏆','Mock Tests','premium','Full syllabus tests','#premium'],
-          ['🏅','Leaderboard','lb','See where you stand','#leaderboard'],
-        ].map(([icon,title,type,sub,route]) => `
-          <div class="card card-hover fade-in" onclick="navigate('${route}')">
-            <div style="font-size:1.8rem;margin-bottom:8px;">${icon}</div>
-            <div style="font-weight:700;font-size:.9rem;margin-bottom:3px;">${title}</div>
-            <div style="font-size:.78rem;color:var(--text3);">${sub}</div>
-          </div>`).join('')}
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="section-title" style="margin-bottom:14px;">📰 Latest News</div>
-      <div id="home-news"><div class="spinner" style="width:24px;height:24px;border-width:2px;"></div></div>
-    </div>`;
-
-  // Load news preview
-  NewsAPI.list().then(items => {
-    const el = document.getElementById('home-news');
-    if (!el) return;
-    el.innerHTML = items.slice(0,3).map(n => `
-      <div style="padding:10px 0;border-bottom:1px solid var(--border);">
-        <div style="font-weight:600;font-size:.88rem;">${n.title}</div>
-        <div style="font-size:.76rem;color:var(--text3);margin-top:2px;">${new Date(n.published_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
-      </div>`).join('') + '<div style="text-align:right;margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="navigate(\'#news\')">All News →</button></div>';
-  }).catch(()=>{});
-}
-
-// Theme
-function toggleTheme() {
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const next   = isDark ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
-  document.getElementById('theme-btn').classList.toggle('on', next === 'dark');
-  localStorage.setItem('ep_theme', next);
-}
-
-// Sidebar
-function toggleSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  if (window.innerWidth <= 900) {
-    sidebar.classList.toggle('mobile-open');
-  } else {
-    sidebar.classList.toggle('collapsed');
-    document.getElementById('main').classList.toggle('full-width');
-  }
-}
-
-// Close mobile sidebar on outside click
-document.addEventListener('click', e => {
-  if (window.innerWidth <= 900) {
-    const sidebar = document.getElementById('sidebar');
-    if (!e.target.closest('#sidebar') && !e.target.closest('#menu-btn') && sidebar.classList.contains('mobile-open')) {
-      sidebar.classList.remove('mobile-open');
-    }
-  }
-});
-
-// Toast
-function showToast(msg, type = 'info', duration = 3500) {
-  const container = document.getElementById('toast-container');
-  const toast     = document.createElement('div');
-  toast.className = `toast ${type}`;
-  const icons     = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
-  toast.innerHTML = `<span>${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
-  container.appendChild(toast);
-  setTimeout(() => { toast.style.opacity='0'; toast.style.transform='translateX(40px)'; toast.style.transition='.3s ease'; setTimeout(()=>toast.remove(), 300); }, duration);
-}
-
-// Modal
-function openModal(title, bodyHTML, footerHTML) {
-  document.getElementById('modal-title').textContent  = title;
-  document.getElementById('modal-body').innerHTML     = bodyHTML;
-  document.getElementById('modal-footer').innerHTML   = footerHTML || '<button class="btn btn-secondary" onclick="closeModal()">Close</button>';
-  document.getElementById('modal-backdrop').classList.add('active');
-}
-function closeModal() {
-  document.getElementById('modal-backdrop').classList.remove('active');
-}
-
-// Close modal on backdrop click
-document.getElementById('modal-backdrop').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal-backdrop')) closeModal();
-});
-
-// Keyboard shortcuts
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    closeModal();
-    if (document.getElementById('omr-overlay').classList.contains('active')) OMR.close();
-  }
-});
-
-// Boot
+// Boot — runs after all scripts loaded
 (function boot() {
   const theme = localStorage.getItem('ep_theme') || 'light';
   document.documentElement.setAttribute('data-theme', theme);
-  document.getElementById('theme-btn').classList.toggle('on', theme === 'dark');
-
+  document.getElementById('theme-toggle').classList.toggle('on', theme === 'dark');
   updateAuthUI();
-
-  const user = Auth.getUser();
-  if (user && !user.is_premium) {
-    document.getElementById('topbar-premium-btn').style.display = 'inline-flex';
-  }
-
-  // Service Worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-    navigator.serviceWorker.addEventListener('message', e => {
-      if (e.data?.type === 'FLUSH_OFFLINE_QUEUE') OfflineQueue.flush();
-    });
-  }
-
-  // Try to keep user premium state fresh
-  if (Auth.isLoggedIn()) {
-    AuthAPI.me().then(me => { Auth.setUser(me); updateAuthUI(); }).catch(() => {});
-  }
-
-  initRouter();
+  window.addEventListener('online',  () => { document.getElementById('offline-bar').classList.remove('visible'); OQ.flush(); });
+  window.addEventListener('offline', () => document.getElementById('offline-bar').classList.add('visible'));
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  go('home');
 })();
 </script>
 </body>
