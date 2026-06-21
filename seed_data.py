@@ -2,9 +2,9 @@
 Seed the database with:
   - 3 exams (JEE Main, JEE Advanced, NEET)
   - Years 2020-2024 for each exam
-  - Multiple shifts for JEE Main, single paper for others
+  - Multiple shifts with 20+ questions each
   - Sample questions for each shift
-  - Premium tracks (Engineering, NEET) with subjects, DPP sets, test sets, mock tests
+  - Premium tracks with DPPs, tests, mocks
   - Sample news items
   - Admin user
 """
@@ -20,13 +20,25 @@ from backend.models.db import (
 )
 from backend.auth import hash_password
 from datetime import datetime
+import random
 
 def seed():
     init_db()
     db = SessionLocal()
     try:
+        # Clear existing data (optional - comment out if you want to keep existing)
+        # db.query(Question).delete()
+        # db.query(Shift).delete()
+        # db.query(Year).delete()
+        # db.query(Exam).delete()
+        # db.commit()
+        
         if db.query(Exam).count() > 0:
-            print("DB already seeded.")
+            print("DB already seeded. Adding more questions...")
+            # Add more questions to existing shifts
+            _add_more_questions(db)
+            db.commit()
+            print("✅ Added more questions!")
             return
 
         print("Seeding database...")
@@ -48,8 +60,8 @@ def seed():
         db.add_all([jee_main, jee_adv, neet])
         db.flush()
 
-        # ── JEE Main: 2020-2024, each year has 2 sessions × 2 shifts ──────
-        jm_shifts = []  # collect for question seeding
+        # ── JEE Main: 2020-2024 ──────────────────────────────────────────
+        jm_shifts = []
         for yr in range(2020, 2025):
             year_obj = Year(exam_id=jee_main.id, year=yr)
             db.add(year_obj); db.flush()
@@ -73,7 +85,7 @@ def seed():
                 db.add(sh); db.flush()
                 jm_shifts.append(sh)
 
-        # ── JEE Advanced: 2020-2024, Paper 1 & Paper 2 ───────────────────
+        # ── JEE Advanced: 2020-2024 ──────────────────────────────────────
         jadv_shifts = []
         for yr in range(2020, 2025):
             year_obj = Year(exam_id=jee_adv.id, year=yr)
@@ -83,7 +95,7 @@ def seed():
                 db.add(sh); db.flush()
                 jadv_shifts.append(sh)
 
-        # ── NEET: 2020-2024, single paper ────────────────────────────────
+        # ── NEET: 2020-2024 ──────────────────────────────────────────────
         neet_shifts = []
         for yr in range(2020, 2025):
             year_obj = Year(exam_id=neet.id, year=yr)
@@ -92,141 +104,23 @@ def seed():
             db.add(sh); db.flush()
             neet_shifts.append(sh)
 
-        # ── Sample questions ──────────────────────────────────────────────
-        # JEE Main sample (3 shifts with full question sets for demo)
-        jm_sample_data = [
-            # (subject, type, q_text, optA, optB, optC, optD, answer, solution, marks_correct, marks_incorrect)
-            (SubjectName.PHYSICS, QuestionType.MCQ_SINGLE,
-             "A particle moves in a straight line with uniform acceleration. If its velocity changes from 10 m/s to 30 m/s in 5 seconds, find the acceleration.",
-             "2 m/s²","4 m/s²","6 m/s²","8 m/s²","B",
-             "Using v = u + at → 30 = 10 + a×5 → a = 20/5 = 4 m/s²", 4, -1),
-            (SubjectName.PHYSICS, QuestionType.NUMERICAL,
-             "A body of mass 2 kg is moving with velocity 5 m/s. Find its kinetic energy in Joules.",
-             None,None,None,None,"25",
-             "KE = ½mv² = ½ × 2 × 25 = 25 J", 4, -1),
-            (SubjectName.PHYSICS, QuestionType.MCQ_SINGLE,
-             "The electric field inside a conductor in electrostatic equilibrium is:",
-             "Maximum","Minimum","Zero","Uniform","C",
-             "In electrostatic equilibrium, free charges redistribute such that the net electric field inside the conductor becomes zero.", 4, -1),
-            (SubjectName.CHEMISTRY, QuestionType.MCQ_SINGLE,
-             "Which of the following is an example of a Lewis acid?",
-             "NH₃","H₂O","BF₃","OH⁻","C",
-             "BF₃ is electron deficient (boron has empty p orbital) and acts as a Lewis acid by accepting electron pairs.", 4, -1),
-            (SubjectName.CHEMISTRY, QuestionType.MCQ_SINGLE,
-             "The IUPAC name of CH₃–CH(OH)–CH₃ is:",
-             "1-propanol","2-propanol","Isopropanol","Propan-2-ol","D",
-             "IUPAC name: propan-2-ol. The OH group is on carbon-2 of a 3-carbon chain.", 4, -1),
-            (SubjectName.CHEMISTRY, QuestionType.NUMERICAL,
-             "How many moles of CO₂ are produced when 44 g of CO₂ is dissolved? (Molar mass of CO₂ = 44 g/mol)",
-             None,None,None,None,"1",
-             "Moles = mass / molar mass = 44 / 44 = 1 mol", 4, -1),
-            (SubjectName.MATHS, QuestionType.MCQ_SINGLE,
-             "If f(x) = x² + 3x + 2, then f(−1) equals:",
-             "0","2","−1","6","A",
-             "f(−1) = (−1)² + 3(−1) + 2 = 1 − 3 + 2 = 0", 4, -1),
-            (SubjectName.MATHS, QuestionType.MCQ_SINGLE,
-             "The value of ∫₀¹ x² dx is:",
-             "1/2","1/3","1/4","2/3","B",
-             "∫₀¹ x² dx = [x³/3]₀¹ = 1/3 − 0 = 1/3", 4, -1),
-            (SubjectName.MATHS, QuestionType.NUMERICAL,
-             "Find the number of ways to arrange the letters of the word EXAM.",
-             None,None,None,None,"24",
-             "EXAM has 4 distinct letters. Arrangements = 4! = 24", 4, -1),
-        ]
-
-        for shift in jm_shifts[:4]:  # seed first 4 shifts with sample questions
-            for i, (subj, qtype, qtxt, a, b, c, d, ans, sol, mc, mi) in enumerate(jm_sample_data, 1):
-                q = Question(
-                    shift_id=shift.id, subject=subj, question_type=qtype,
-                    question_number=i, question_format=ContentFormat.TEXT,
-                    question_text=qtxt, option_a=a, option_b=b, option_c=c, option_d=d,
-                    correct_answer=ans, marks_correct=mc, marks_incorrect=mi,
-                    solution_format=ContentFormat.TEXT, solution_text=sol,
-                )
-                db.add(q)
-
-        # JEE Advanced sample (MCQ_MULTIPLE + NUMERICAL)
-        jadv_data = [
-            (SubjectName.PHYSICS, QuestionType.MCQ_MULTIPLE,
-             "Which of the following statements about projectile motion are correct?",
-             "Horizontal velocity is constant","Vertical acceleration is g downward",
-             "Time of flight depends on horizontal velocity","Range is maximum at 45°",
-             "A,B,D",
-             "In projectile motion: horizontal velocity is constant (no air resistance), vertical acceleration = g, time of flight is independent of horizontal velocity, and range is maximum at 45°.", 4, -2),
-            (SubjectName.PHYSICS, QuestionType.NUMERICAL,
-             "A spring of spring constant 200 N/m is compressed by 0.1 m. Find the elastic potential energy stored (in Joules).",
-             None,None,None,None,"1",
-             "PE = ½kx² = ½ × 200 × 0.01 = 1 J", 4, 0),
-            (SubjectName.CHEMISTRY, QuestionType.MCQ_MULTIPLE,
-             "Which of the following are colligative properties?",
-             "Elevation of boiling point","Depression of freezing point","Osmotic pressure","Vapour pressure of solvent",
-             "A,B,C",
-             "Colligative properties depend on number of solute particles: boiling point elevation, freezing point depression, and osmotic pressure. Vapour pressure of pure solvent is not a colligative property.", 4, -2),
-            (SubjectName.MATHS, QuestionType.MCQ_SINGLE,
-             "The number of real solutions of x² + |x| + 1 = 0 is:",
-             "0","1","2","4","A",
-             "x² ≥ 0, |x| ≥ 0, so x² + |x| + 1 ≥ 1 > 0 for all real x. No real solutions.", 3, -1),
-        ]
-
-        for shift in jadv_shifts[:2]:
-            for i, (subj, qtype, qtxt, a, b, c, d, ans, sol, mc, mi) in enumerate(jadv_data, 1):
-                q = Question(
-                    shift_id=shift.id, subject=subj, question_type=qtype,
-                    question_number=i, question_format=ContentFormat.TEXT,
-                    question_text=qtxt, option_a=a, option_b=b, option_c=c, option_d=d,
-                    correct_answer=ans, marks_correct=mc, marks_incorrect=mi,
-                    solution_format=ContentFormat.TEXT, solution_text=sol,
-                )
-                db.add(q)
-
-        # NEET sample
-        neet_data = [
-            (SubjectName.PHYSICS, QuestionType.MCQ_SINGLE,
-             "The SI unit of electric charge is:",
-             "Ampere","Coulomb","Volt","Watt","B",
-             "The SI unit of electric charge is the Coulomb (C). 1 C = charge carried by 6.24 × 10¹⁸ electrons.", 4, -1),
-            (SubjectName.CHEMISTRY, QuestionType.MCQ_SINGLE,
-             "Which of the following has the highest electronegativity?",
-             "Oxygen","Nitrogen","Fluorine","Chlorine","C",
-             "Fluorine has the highest electronegativity (3.98 on Pauling scale) of all elements.", 4, -1),
-            (SubjectName.BIOLOGY, QuestionType.MCQ_SINGLE,
-             "The powerhouse of the cell is:",
-             "Nucleus","Ribosome","Mitochondria","Golgi apparatus","C",
-             "Mitochondria are called the powerhouse of the cell because they produce ATP through cellular respiration.", 4, -1),
-            (SubjectName.BIOLOGY, QuestionType.MCQ_SINGLE,
-             "Which blood group is known as the universal donor?",
-             "A","B","AB","O","D",
-             "Blood group O (O negative specifically) is the universal donor because it lacks A and B antigens on red blood cells.", 4, -1),
-            (SubjectName.BIOLOGY, QuestionType.MCQ_SINGLE,
-             "DNA replication is:",
-             "Conservative","Semi-conservative","Dispersive","None of these","B",
-             "DNA replication is semi-conservative: each new DNA molecule contains one original strand and one newly synthesized strand, as demonstrated by the Meselson-Stahl experiment.", 4, -1),
-        ]
-
-        for shift in neet_shifts[:2]:
-            for i, (subj, qtype, qtxt, a, b, c, d, ans, sol, mc, mi) in enumerate(neet_data, 1):
-                q = Question(
-                    shift_id=shift.id, subject=subj, question_type=qtype,
-                    question_number=i, question_format=ContentFormat.TEXT,
-                    question_text=qtxt, option_a=a, option_b=b, option_c=c, option_d=d,
-                    correct_answer=ans, marks_correct=mc, marks_incorrect=mi,
-                    solution_format=ContentFormat.TEXT, solution_text=sol,
-                )
-                db.add(q)
+        # ── Add questions to all shifts ──────────────────────────────────
+        _add_questions_to_shifts(db, jm_shifts, "JEE_MAIN")
+        _add_questions_to_shifts(db, jadv_shifts, "JEE_ADVANCED")
+        _add_questions_to_shifts(db, neet_shifts, "NEET")
 
         # ── Premium Tracks ────────────────────────────────────────────────
         eng_track  = PremiumExamTrack(name="ENGINEERING", display_name="Engineering (JEE)", is_active=True)
         neet_track = PremiumExamTrack(name="NEET",        display_name="NEET UG",           is_active=True)
         db.add_all([eng_track, neet_track]); db.flush()
 
-        # Engineering subjects: Physics, Chemistry, Maths
+        # Engineering subjects
         for subj_name in [SubjectName.PHYSICS, SubjectName.CHEMISTRY, SubjectName.MATHS]:
             subj = PremiumSubject(track_id=eng_track.id, name=subj_name, is_active=True)
             db.add(subj); db.flush()
             _seed_premium_subject(db, subj, subj_name, "Engineering")
 
-        # NEET subjects: Physics, Chemistry, Biology
-        # NOTE: Maths for NEET is created but is_active=False (commented feature)
+        # NEET subjects
         for subj_name, active in [(SubjectName.PHYSICS, True), (SubjectName.CHEMISTRY, True),
                                    (SubjectName.BIOLOGY, True), (SubjectName.MATHS, False)]:
             subj = PremiumSubject(track_id=neet_track.id, name=subj_name, is_active=active)
@@ -262,6 +156,137 @@ def seed():
     finally:
         db.close()
 
+def _add_questions_to_shifts(db, shifts, exam_type):
+    """Add 20+ questions to each shift"""
+    for shift in shifts:
+        # Physics questions
+        physics_questions = [
+            ("A particle moves with velocity v = 2t² + 3t m/s. Find acceleration at t=2s.", 
+             "7 m/s²", "11 m/s²", "8 m/s²", "10 m/s²", "A", "a = dv/dt = 4t + 3, at t=2: a = 11 m/s²"),
+            ("What is the work done by a force F = 5N moving an object 10m?",
+             "25 J", "50 J", "75 J", "100 J", "B", "W = F × d = 5 × 10 = 50 J"),
+            ("A ball is thrown upward with velocity 20 m/s. Find max height (g=10 m/s²).",
+             "10 m", "15 m", "20 m", "25 m", "C", "h = v²/2g = 400/20 = 20 m"),
+            ("What is the SI unit of force?",
+             "Newton", "Joule", "Watt", "Pascal", "A", "The SI unit of force is Newton (N)."),
+            ("A body of mass 2 kg has KE 100 J. Find its velocity.",
+             "5 m/s", "7 m/s", "10 m/s", "14 m/s", "C", "KE = ½mv² → v² = 2KE/m = 200/2 = 100 → v = 10 m/s"),
+            ("What is the acceleration due to gravity on Earth?",
+             "8.9 m/s²", "9.8 m/s²", "10.8 m/s²", "11.8 m/s²", "B", "Standard value of g on Earth is 9.8 m/s²."),
+            ("A spring with k=100 N/m is compressed by 0.05m. Find PE stored.",
+             "0.125 J", "0.25 J", "0.5 J", "1 J", "A", "PE = ½kx² = ½ × 100 × 0.0025 = 0.125 J"),
+        ]
+        
+        # Chemistry questions
+        chemistry_questions = [
+            ("What is the molar mass of H₂O?",
+             "16 g/mol", "18 g/mol", "20 g/mol", "22 g/mol", "B", "H₂O: 2×1 + 16 = 18 g/mol"),
+            ("Which is a noble gas?",
+             "Oxygen", "Nitrogen", "Helium", "Chlorine", "C", "Helium (He) is a noble gas in Group 18."),
+            ("What is the pH of pure water?",
+             "5", "6", "7", "8", "C", "Pure water has pH = 7 at 25°C."),
+            ("Which is an acid?",
+             "NaOH", "HCl", "NaCl", "KOH", "B", "HCl (Hydrochloric acid) is an acid."),
+            ("What is the atomic number of Carbon?",
+             "4", "5", "6", "7", "C", "Carbon has atomic number 6."),
+            ("Which is an alkane?",
+             "C₂H₄", "C₂H₂", "C₂H₆", "C₆H₆", "C", "C₂H₆ (Ethane) is an alkane."),
+            ("What is the formula of Sulphuric Acid?",
+             "H₂SO₃", "H₂SO₄", "H₂S₂O₃", "H₂S₂O₇", "B", "Sulphuric acid formula is H₂SO₄."),
+        ]
+        
+        # Maths questions
+        maths_questions = [
+            ("What is the derivative of x²?",
+             "x", "2x", "x²", "2x²", "B", "d/dx(x²) = 2x"),
+            ("What is the integral of 2x dx?",
+             "x² + C", "x²", "2x² + C", "x + C", "A", "∫2x dx = x² + C"),
+            ("What is the value of sin 90°?",
+             "0", "0.5", "1", "√2/2", "C", "sin 90° = 1"),
+            ("Solve for x: 2x + 3 = 7",
+             "1", "2", "3", "4", "B", "2x = 4 → x = 2"),
+            ("What is the area of a circle with radius 7?",
+             "49π", "14π", "28π", "98π", "A", "Area = πr² = 49π"),
+            ("What is log₁₀(100)?",
+             "1", "2", "3", "4", "B", "log₁₀(100) = 2"),
+            ("What is the slope of y = 2x + 3?",
+             "1", "2", "3", "4", "B", "Slope is the coefficient of x: 2"),
+        ]
+
+        # For NEET, add Biology questions instead of Maths
+        if exam_type == "NEET":
+            biology_questions = [
+                ("What is the powerhouse of the cell?",
+                 "Nucleus", "Ribosome", "Mitochondria", "Golgi", "C", "Mitochondria produce ATP."),
+                ("Which blood group is universal donor?",
+                 "A", "B", "AB", "O", "D", "O negative is universal donor."),
+                ("What is the largest organ in human body?",
+                 "Liver", "Skin", "Brain", "Heart", "B", "Skin is the largest organ."),
+                ("Which is an example of a prokaryote?",
+                 "Eukarya", "Bacteria", "Fungi", "Plantae", "B", "Bacteria are prokaryotes."),
+                ("What is the function of DNA?",
+                 "Energy storage", "Cell division", "Genetic information", "Protein synthesis", "C", "DNA stores genetic information."),
+                ("Which is a vitamin?",
+                 "Calcium", "Iron", "Vitamin C", "Protein", "C", "Vitamin C is a vitamin."),
+            ]
+            # Combine all questions for NEET
+            all_questions = physics_questions + chemistry_questions + biology_questions
+        else:
+            # For JEE Main and Advanced: Physics + Chemistry + Maths
+            all_questions = physics_questions + chemistry_questions + maths_questions
+
+        # Add questions to this shift
+        for i, q in enumerate(all_questions[:25], 1):  # Add up to 25 questions per shift
+            question = Question(
+                shift_id=shift.id,
+                subject=SubjectName.PHYSICS if i <= len(physics_questions) else 
+                       SubjectName.CHEMISTRY if i <= len(physics_questions) + len(chemistry_questions) else
+                       SubjectName.MATHS if exam_type != "NEET" else SubjectName.BIOLOGY,
+                question_type=QuestionType.MCQ_SINGLE,
+                question_number=i,
+                question_format=ContentFormat.TEXT,
+                question_text=q[0],
+                option_a=q[1],
+                option_b=q[2],
+                option_c=q[3],
+                option_d=q[4],
+                correct_answer=q[5],
+                marks_correct=4.0 if exam_type != "NEET" else 4.0,
+                marks_incorrect=-1.0 if exam_type != "NEET" else -1.0,
+                solution_format=ContentFormat.TEXT,
+                solution_text=q[6],
+            )
+            db.add(question)
+        db.flush()
+        print(f"  ✓ Added {min(25, len(all_questions))} questions to shift {shift.label}")
+
+def _add_more_questions(db):
+    """Add more questions to existing shifts"""
+    shifts = db.query(Shift).all()
+    for shift in shifts[:5]:  # Add to first 5 shifts
+        existing_count = db.query(Question).filter(Question.shift_id == shift.id).count()
+        if existing_count < 10:
+            # Add more questions
+            for i in range(existing_count + 1, existing_count + 11):
+                question = Question(
+                    shift_id=shift.id,
+                    subject=SubjectName.PHYSICS if i % 3 == 0 else SubjectName.CHEMISTRY if i % 3 == 1 else SubjectName.MATHS,
+                    question_type=QuestionType.MCQ_SINGLE,
+                    question_number=i,
+                    question_format=ContentFormat.TEXT,
+                    question_text=f"Sample question {i} for {shift.label}",
+                    option_a="Option A",
+                    option_b="Option B",
+                    option_c="Option C",
+                    option_d="Option D",
+                    correct_answer="A" if i % 2 == 0 else "B",
+                    marks_correct=4.0,
+                    marks_incorrect=-1.0,
+                    solution_format=ContentFormat.TEXT,
+                    solution_text=f"Solution for question {i}. The correct answer is {'A' if i % 2 == 0 else 'B'}.",
+                )
+                db.add(question)
+            print(f"  ✓ Added 10 more questions to shift {shift.label}")
 
 def _seed_premium_subject(db, subj, subj_name, track_label):
     """Create DPP set, test set with chapters/modules, and mock tests for a subject."""
@@ -273,7 +298,7 @@ def _seed_premium_subject(db, subj, subj_name, track_label):
     }
     chapters = chapters_by_subject.get(subj_name, ["Chapter 1"])
 
-    # DPP Sets (2 sets with varying question counts)
+    # DPP Sets
     for set_num, qcount in enumerate([10, 15], 1):
         dpp_set = DppSet(subject_id=subj.id, name=f"DPP Set {set_num}", questions_per_dpp=qcount)
         db.add(dpp_set); db.flush()
@@ -281,7 +306,6 @@ def _seed_premium_subject(db, subj, subj_name, track_label):
             dpp = Dpp(dpp_set_id=dpp_set.id, title=f"DPP {i} – {ch}",
                       chapter_name=ch, order_index=i, duration_minutes=qcount * 2)
             db.add(dpp); db.flush()
-            # Seed 2 sample questions per DPP
             for qn in range(1, 3):
                 db.add(Question(
                     dpp_id=dpp.id, subject=subj_name,
@@ -295,7 +319,7 @@ def _seed_premium_subject(db, subj, subj_name, track_label):
                     solution_text=f"Correct answer is A. Detailed explanation for {ch} concept.", topic=ch,
                 ))
 
-    # Chapterwise Test Sets (2 sets)
+    # Test Sets
     for set_num in range(1, 3):
         test_set = TestSet(subject_id=subj.id, name=f"Set {set_num}")
         db.add(test_set); db.flush()
@@ -318,7 +342,7 @@ def _seed_premium_subject(db, subj, subj_name, track_label):
                         solution_text=f"The answer is B. Explanation for {ch_name} Module {mod_num}.", topic=ch_name,
                     ))
 
-    # Full Syllabus Mock Tests
+    # Mock Tests
     for mt_num in range(1, 4):
         mock = MockTest(subject_id=subj.id, title=f"{track_label} {subj_name.value.title()} Mock Test {mt_num}",
                         duration_minutes=180 if track_label == "Engineering" else 200, order_index=mt_num)
@@ -338,4 +362,3 @@ def _seed_premium_subject(db, subj, subj_name, track_label):
 
 if __name__ == "__main__":
     seed()
-
