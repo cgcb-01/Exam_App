@@ -34,7 +34,7 @@ os.makedirs("uploads", exist_ok=True)
 app.mount("/static/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Serve frontend SPA
-app.mount("/assets", StaticFiles(directory="frontend"), name="frontend_assets")
+app.mount("/assets", StaticFiles(directory="frontend/assets"), name="frontend_assets")
 
 @app.get("/", include_in_schema=False)
 @app.get("/{full_path:path}", include_in_schema=False)
