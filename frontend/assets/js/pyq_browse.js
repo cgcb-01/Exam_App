@@ -38,6 +38,30 @@ function _pyqRender(el) {
 function _pyqExam(type) { _pyqState.activeExam = type; _pyqState.activeYear = null; _pyqRender(document.getElementById('page-content')); }
 function _pyqYear(yr)   { _pyqState.activeYear = yr;   _pyqRender(document.getElementById('page-content')); }
 
+// ADD THIS FUNCTION - Minimal PDF download with auth
+async function downloadPDF(url) {
+    const token = localStorage.getItem('ep_tok');
+    if (!token) {
+        toast('Please login to download', 'warn');
+        go('login');
+        return;
+    }
+    try {
+        const res = await fetch(url, {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (!res.ok) throw new Error('Download failed');
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = url.split('/').pop() + '.pdf';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    } catch(e) {
+        toast('PDF download failed', 'err');
+    }
+}
+
 function _pyqShiftsHTML(year, exam) {
   if (!year.shifts.length) return '<div class="empty-state"><div class="empty-title">No papers available for this year</div></div>';
   return `<div style="display:flex;flex-direction:column;gap:8px">
@@ -60,7 +84,7 @@ function _pyqShiftsHTML(year, exam) {
               ${IC.dl}&nbsp;PDF&nbsp;<svg viewBox="0 0 24 24" width="9" height="9" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
             <div id="dlmenu-${sh.id}" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--radius);box-shadow:var(--shadow-lg);z-index:200;padding:4px;min-width:196px">
-              ${[['Question Paper',`/api/pdf/shift/${sh.id}/paper`],['Paper + OMR Sheet',`/api/pdf/shift/${sh.id}/paper?include_omr=true`],['Answer Key + Solutions',`/api/pdf/shift/${sh.id}/solutions`],['Blank OMR Sheet',`/api/pdf/shift/${sh.id}/omr`]].map(([l,u]) => `<a href="${u}" target="_blank" class="dl-row" style="display:block;padding:7px 12px;font-size:12px;font-weight:500;color:var(--c-text2);border-radius:5px;white-space:nowrap" onmouseover="this.style.background='var(--c-bg2)'" onmouseout="this.style.background=''">${l}</a>`).join('')}
+              ${[['Question Paper',`/api/pdf/shift/${sh.id}/paper`],['Paper + OMR Sheet',`/api/pdf/shift/${sh.id}/paper?include_omr=true`],['Answer Key + Solutions',`/api/pdf/shift/${sh.id}/solutions`],['Blank OMR Sheet',`/api/pdf/shift/${sh.id}/omr`]].map(([l,u]) => `<a href="#" onclick="event.preventDefault();downloadPDF('${u}')" class="dl-row" style="display:block;padding:7px 12px;font-size:12px;font-weight:500;color:var(--c-text2);border-radius:5px;white-space:nowrap" onmouseover="this.style.background='var(--c-bg2)'" onmouseout="this.style.background=''">${l}</a>`).join('')}
             </div>
           </div>
           <button class="btn btn-secondary btn-sm" onclick="lbPerTest('SHIFT',${sh.id},'${sh.label}')">Leaderboard</button>
@@ -97,7 +121,7 @@ function _renderSolutionViewer(el, qs, title, shiftId) {
         <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>&nbsp;Back
       </button>
       <div style="flex:1;font-size:15px;font-weight:800;color:var(--c-text);letter-spacing:-.3px">${title}</div>
-      ${shiftId ? `<a class="btn btn-secondary btn-sm" href="/api/pdf/shift/${shiftId}/solutions" target="_blank">${IC.dl}&nbsp;Download PDF</a>` : ''}
+      ${shiftId ? `<a href="#" onclick="event.preventDefault();downloadPDF('/api/pdf/shift/${shiftId}/solutions')" class="btn btn-secondary btn-sm">${IC.dl}&nbsp;Download PDF</a>` : ''}
     </div>
     ${Object.entries(bySubj).map(([subj, sqs]) => `
     <div style="margin-bottom:28px">

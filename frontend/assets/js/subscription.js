@@ -1,142 +1,88 @@
-/**
- * subscription.js — Plans page, billing UI, and status display.
- */
+registerPage('subscription', async function(el) {
+  el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  const [plans, status] = await Promise.all([
+    GET('/api/subscriptions/plans'),
+    Auth.loggedIn() ? GET('/api/subscriptions/status') : Promise.resolve({ is_premium:false, subscription:null })
+  ]);
+  _subRender(el, plans, status);
+});
 
-async function renderSubscription(container) {
-  container.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
-  try {
-    const [plans, status] = await Promise.all([
-      SubAPI.plans(),
-      Auth.isLoggedIn() ? SubAPI.status() : Promise.resolve({ is_premium: false, subscription: null }),
-    ]);
-    _drawSubscription(container, plans, status);
-  } catch(e) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><h3>${e.message}</h3></div>`;
-  }
-}
-
-function _drawSubscription(container, plans, status) {
+function _subRender(el, plans, status) {
   const { is_premium, subscription } = status;
+  el.innerHTML = `<div class="fade-in" style="max-width:860px;margin:0 auto">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="display:inline-block;padding:6px 16px;background:var(--c-blue-l);color:var(--c-blue);border-radius:99px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">Premium Access</div>
+      <div class="page-title" style="font-size:26px;letter-spacing:-.5px">Unlock Full Preparation</div>
+      <div class="page-sub" style="max-width:480px;margin:6px auto 0">Get access to DPPs, Chapterwise Tests, and Full Syllabus Mock Tests for JEE Main, JEE Advanced, and NEET UG.</div>
+    </div>
 
-  container.innerHTML = `
-    <div style="max-width:860px;margin:0 auto;">
-      <div style="text-align:center;margin-bottom:32px;">
-        <div style="font-size:2.5rem;margin-bottom:10px;">⭐</div>
-        <div class="section-title" style="font-size:1.4rem;">Unlock Premium Access</div>
-        <div class="section-sub">Get full access to DPPs, Chapterwise Tests, and Mock Tests for JEE & NEET.</div>
+    ${is_premium && subscription ? `<div style="background:var(--c-green-l);border:1px solid var(--c-green);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="width:36px;height:36px;background:var(--c-green);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff">${IC.chk}</div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:800;color:var(--c-green)">Premium Active</div>
+      <div style="font-size:11px;color:var(--c-green);opacity:.8">Plan: ${subscription.plan} &middot; Renews ${new Date(subscription.current_period_end).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div></div>
+      <button class="btn btn-success btn-sm" onclick="go('premium')">Browse Content</button>
+      <button class="btn btn-secondary btn-sm" onclick="_subCancel()">Cancel</button>
+    </div>` : ''}
+
+    <div class="plans-row" style="margin-bottom:32px">
+      ${plans.map(p => `
+      <div class="plan-card ${p.best_value?'featured':''}" onclick="_subSelect('${p.plan}')">
+        <div class="plan-name">${{INTRO:'Intro Offer',MONTHLY:'Monthly',HALF_YEARLY:'Half-Yearly',ANNUAL:'Annual'}[p.plan]||p.plan}</div>
+        <div class="plan-price">&#8377;${p.price.toFixed(0)}</div>
+        <div class="plan-period">${{INTRO:'/ month',MONTHLY:'/ month',HALF_YEARLY:'/ 6 months',ANNUAL:'/ year'}[p.plan]||''}</div>
+        <div class="plan-saving">${{INTRO:'New users only',MONTHLY:'',HALF_YEARLY:'Save &#8377;81',ANNUAL:'Save &#8377;210'}[p.plan]||'&nbsp;'}</div>
+        <button class="btn btn-primary" style="width:100%" onclick="event.stopPropagation();_subSelect('${p.plan}')">
+          ${is_premium?'Switch':'Get Started'}
+        </button>
+      </div>`).join('')}
+    </div>
+
+    <div class="card" style="margin-bottom:24px"><div class="card-body">
+      <div style="font-size:13px;font-weight:800;color:var(--c-text);margin-bottom:16px">Everything in Premium</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${['DPP — All Chapters for Physics, Chemistry, Maths and Biology','Chapterwise Tests with Module-wise Question Sets','Full Syllabus Mock Tests in real exam format','Download PDFs with OMR sheets for offline practice','Camera proctoring for focused practice sessions','Advanced performance dashboard with charts','Access leaderboards for every test and overall','Works on mobile, tablet and desktop browser'].map(f=>`
+        <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:var(--c-surface2);border-radius:var(--radius-sm)">
+          <div style="color:var(--c-green);flex-shrink:0;margin-top:1px">${IC.chk}</div>
+          <span style="font-size:12px;color:var(--c-text2)">${f}</span>
+        </div>`).join('')}
       </div>
+    </div></div>
 
-      ${is_premium && subscription ? _activeBanner(subscription) : ''}
-
-      <div class="plans-grid">
-        ${plans.map(p => _planCard(p, is_premium)).join('')}
-      </div>
-
-      <div class="card" style="margin-top:28px;">
-        <div class="section-title" style="margin-bottom:16px;">What's included in Premium?</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          ${['📋 DPP – All Chapters (Physics, Chemistry, Maths/Biology)',
-             '📚 Chapterwise Tests with Module-wise Questions',
-             '🏆 Full Syllabus Mock Tests (JEE & NEET format)',
-             '⬇ Download PDFs for offline study',
-             '📊 Advanced Performance Dashboard',
-             '🔴 Camera Proctoring for Focused Practice',
-             '🏅 Access Leaderboards for every test',
-             '📱 Works on mobile, tablet and desktop'].map(f =>
-            `<div style="display:flex;align-items:flex-start;gap:8px;font-size:.88rem;">
-              <span>${f.split(' ')[0]}</span>
-              <span style="color:var(--text2);">${f.slice(f.indexOf(' ')+1)}</span>
-            </div>`).join('')}
-        </div>
-      </div>
-
-      <div style="text-align:center;margin-top:20px;font-size:.8rem;color:var(--text3);">
-        Payments powered by Razorpay. Secure checkout. Cancel anytime.
-        ${is_premium ? `<br><button class="btn btn-sm" style="background:none;color:var(--danger);border:none;margin-top:8px;" onclick="_cancelSub()">Cancel Subscription</button>` : ''}
-      </div>
-    </div>`;
+    <div style="text-align:center;font-size:11px;color:var(--c-text4)">
+      Secure payments. Cancel anytime. Access continues until period end after cancellation.
+    </div>
+  </div>`;
 }
 
-function _activeBanner(sub) {
-  const end = new Date(sub.current_period_end).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
-  return `
-    <div style="background:linear-gradient(135deg,#14532d,#16a34a);color:#fff;border-radius:var(--radius-lg);padding:18px 22px;margin-bottom:24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-      <span style="font-size:1.8rem;">✅</span>
-      <div style="flex:1;">
-        <div style="font-weight:800;font-size:1rem;">You have an active Premium subscription</div>
-        <div style="font-size:.85rem;opacity:.9;">Plan: ${sub.plan} &nbsp;·&nbsp; Renews / Expires: ${end}</div>
-      </div>
-      <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);" onclick="navigate('#premium')">Browse Content →</button>
-    </div>`;
-}
-
-function _planCard(plan, isPremium) {
-  const prices = { INTRO:'₹80', MONTHLY:'₹80', HALF_YEARLY:'₹399', ANNUAL:'₹750' };
-  const periods= { INTRO:'/month (first 3 months)', MONTHLY:'/month', HALF_YEARLY:'/6 months', ANNUAL:'/year' };
-  const savings= { INTRO:'New users only', MONTHLY:'', HALF_YEARLY:'Save ₹81', ANNUAL:'Save ₹210' };
-
-  return `
-    <div class="plan-card ${plan.best_value?'best-value':''}" onclick="_selectPlan('${plan.plan}')">
-      <div class="plan-name">${_planName(plan.plan)}</div>
-      <div class="plan-price">${prices[plan.plan]}</div>
-      <div class="plan-period">${periods[plan.plan]}</div>
-      ${savings[plan.plan] ? `<div class="plan-savings">${savings[plan.plan]}</div>` : '<div style="height:22px;"></div>'}
-      <button class="btn btn-primary" style="width:100%;margin-top:6px;"
-              onclick="event.stopPropagation();_selectPlan('${plan.plan}')">
-        ${isPremium ? 'Switch Plan' : 'Get Started'}
-      </button>
-    </div>`;
-}
-
-function _planName(plan) {
-  const n = { INTRO:'Intro Offer', MONTHLY:'Monthly', HALF_YEARLY:'Half-Yearly', ANNUAL:'Annual' };
-  return n[plan] || plan;
-}
-
-function _selectPlan(plan) {
-  if (!requireAuth()) return;
-
-  const prices = { INTRO:80, MONTHLY:80, HALF_YEARLY:399, ANNUAL:750 };
-  const names  = { INTRO:'Intro (₹80 × 3 months)', MONTHLY:'Monthly (₹80/month)', HALF_YEARLY:'Half-Yearly (₹399)', ANNUAL:'Annual (₹750/year)' };
-
+function _subSelect(plan) {
+  if (!requireLogin()) return;
+  const names = { INTRO:'Intro — &#8377;80/month (first 3 months)', MONTHLY:'Monthly — &#8377;80/month', HALF_YEARLY:'Half-Yearly — &#8377;399', ANNUAL:'Annual — &#8377;750/year' };
   openModal('Confirm Subscription', `
-    <div style="text-align:center;padding:10px 0;">
-      <div style="font-size:2rem;margin-bottom:12px;">⭐</div>
-      <p style="font-size:.95rem;margin-bottom:8px;">You are selecting:</p>
-      <div style="font-size:1.1rem;font-weight:800;color:var(--primary);margin-bottom:16px;">${names[plan]}</div>
-      <p style="font-size:.85rem;color:var(--text2);">
-        In a production environment, this would redirect to Razorpay checkout.
-        For this demo, your subscription will be activated directly.
-      </p>
+    <div class="modal-body-pad" style="text-align:center">
+      <div style="font-size:24px;font-weight:900;color:var(--c-text);margin-bottom:8px">${names[plan]||plan}</div>
+      <div style="font-size:12px;color:var(--c-text3);margin-bottom:16px;line-height:1.6">In production this redirects to Razorpay checkout.<br>For this demo your subscription will be activated immediately.</div>
+      <div style="background:var(--c-surface2);border-radius:var(--radius);padding:12px;font-size:11px;color:var(--c-text4)">
+        Auto-renews until cancelled. Cancel anytime from account settings.
+      </div>
     </div>`,
     `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-     <button class="btn btn-primary" onclick="_activatePlan('${plan}')">Activate Now</button>`
-  );
+     <button class="btn btn-primary" onclick="_subActivate('${plan}')">Activate Now</button>`);
 }
 
-async function _activatePlan(plan) {
+async function _subActivate(plan) {
   closeModal();
-  const prices = { INTRO:80, MONTHLY:80, HALF_YEARLY:399, ANNUAL:750 };
   try {
-    await SubAPI.activate({ plan, payment_gateway_ref: 'DEMO_' + Date.now() });
-    // Refresh user premium status
-    const me = await AuthAPI.me();
-    Auth.setUser(me);
+    await POST('/api/subscriptions/activate', { plan, payment_gateway_ref: 'DEMO_'+Date.now() });
+    const me = await GET('/api/auth/me');
+    Auth.set(Auth.token(), me);
     updateAuthUI();
-    showToast('🎉 Premium activated! Welcome aboard.', 'success');
-    renderSubscription(document.getElementById('page-content'));
-  } catch(e) {
-    showToast('Activation failed: ' + e.message, 'error');
-  }
+    toast('Premium activated! Welcome.', 'ok');
+    go('subscription');
+  } catch(e) { toast(e.message, 'err'); }
 }
 
-async function _cancelSub() {
-  if (!confirm('Cancel your subscription? You will keep access until the period ends.')) return;
-  try {
-    await SubAPI.cancel();
-    showToast('Subscription cancelled. Access continues until expiry.', 'info');
-    renderSubscription(document.getElementById('page-content'));
-  } catch(e) {
-    showToast('Error: ' + e.message, 'error');
-  }
+async function _subCancel() {
+  if (!confirm('Cancel subscription? Access continues until the period ends.')) return;
+  try { await POST('/api/subscriptions/cancel', {}); toast('Subscription cancelled.', 'info'); go('subscription'); }
+  catch(e) { toast(e.message, 'err'); }
 }
