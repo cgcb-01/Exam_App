@@ -1,136 +1,116 @@
 'use strict';
-// ─── Exam state ───────────────────────────────────────────────────────────────
-let _E = {
-  id: null, qs: [], answers: {}, cur: 0,
-  endTime: 0, dur: 180, started: 0,
-  timer: null, qTimer: 0, subjects: [],
-  readonly: false, camId: null, camInterval: null,
-  camStream: null, micStream: null,
-};
+window._ES = { id:null,qs:[],answers:{},cur:0,endTime:0,dur:180,timer:null,qTimer:0,subjects:[],readonly:false,camId:null,camInterval:null,camStream:null,micStream:null,neetMode:false };
 
-// ─── Entry point ──────────────────────────────────────────────────────────────
-async function examLaunch(opts = {}) {
+// ═══════════════════════════════════════════════════════════════════════════
+//  ENTRY POINT
+// ═══════════════════════════════════════════════════════════════════════════
+async function examLaunch(opts) {
+  opts = opts || {};
   if (!requireLogin()) return;
   window._lastExamOpts = opts;
-
-  // Build overlay first — completely replace body content
-  const overlay = document.getElementById('exam-overlay');
-  overlay.style.cssText = 'position:fixed;inset:0;background:var(--c-bg);z-index:1000;display:flex;flex-direction:column;';
-  overlay.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:14px">
-    <div class="spinner" style="width:40px;height:40px;border-width:3px"></div>
-    <div style="font-size:13px;color:var(--c-text3);font-weight:600">Loading exam...</div>
-  </div>`;
+  const ov = document.getElementById('exam-overlay');
+  ov.style.cssText = 'position:fixed;inset:0;background:var(--c-bg);z-index:1000;display:flex;flex-direction:column;overflow:hidden;';
+  ov.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:18px"><div class="spinner" style="width:48px;height:48px;border-width:4px"></div><div style="font-size:14px;font-weight:600;color:var(--c-text3)">Loading exam, please wait...</div></div>';
 
   try {
-    let attempt, questions;
+    let attempt, questions, camId = null;
 
     if (opts.readonly && opts.attempt_id) {
-      attempt   = await GET('/api/attempts/' + opts.attempt_id);
-      questions = await GET('/api/attempts/' + opts.attempt_id + '/solutions');
-      _E.readonly = true;
+      [attempt, questions] = await Promise.all([
+        GET('/api/attempts/' + opts.attempt_id),
+        GET('/api/attempts/' + opts.attempt_id + '/solutions')
+      ]);
+      window._ES.readonly = true;
     } else {
-      // Ask about camera/mic if not specified
-      if (opts.camera === undefined) {
-        const useCam = await _askProctoring();
-        opts.camera = useCam.camera;
-        opts.mic    = useCam.mic;
-      }
-
-      let camId = null;
+      window._ES.readonly = false;
       if (opts.camera) {
-        try {
-          const cs = await POST('/api/camera/start', { attempt_context: opts.title || '' });
-          camId = cs.id;
-        } catch {}
+        try { const cs = await POST('/api/camera/start', {attempt_context: opts.title||''}); camId = cs.id; } catch(e) { console.warn('cam:', e); }
       }
-
       attempt = await POST('/api/attempts/start', {
-        shift_id:     opts.shift_id     || null,
-        dpp_id:       opts.dpp_id       || null,
-        module_id:    opts.module_id    || null,
-        mock_test_id: opts.mock_test_id || null,
-        is_offline_attempt: false,
-        camera_session_id: camId,
+        shift_id: opts.shift_id||null, dpp_id: opts.dpp_id||null,
+        module_id: opts.module_id||null, mock_test_id: opts.mock_test_id||null,
+        is_offline_attempt: false, camera_session_id: camId
       });
       questions = attempt.questions || [];
-      _E.readonly = false;
-      _E.camId    = camId;
     }
 
-    if (!questions || questions.length === 0) {
-      overlay.style.display = 'none';
-      toast('This test has no questions yet. Please check back later.', 'err', 5000);
+    if (!questions || !questions.length) {
+      ov.style.display = 'none';
+      toast('No questions in this test yet.', 'err', 5000);
       return;
     }
 
-    // Reset state
-    const elapsed = (Date.now() - new Date(attempt.started_at).getTime()) / 1000;
-    _E = {
-      id: attempt.id, qs: questions, answers: {},
-      cur: 0, qTimer: Date.now(),
-      dur: attempt.duration_minutes_allotted,
-      started: new Date(attempt.started_at).getTime(),
-      endTime: Date.now() + Math.max(0, attempt.duration_minutes_allotted * 60 - elapsed) * 1000,
-      timer: null, subjects: [...new Set(questions.map(q => q.subject))],
-      readonly: _E.readonly, camId: _E.camId, camInterval: null,
-      camStream: null, micStream: null,
+    // Parse started_at safely — backend now appends 'Z' so JS treats as UTC
+    const startedAt = new Date(attempt.started_at);
+    const startMs   = isNaN(startedAt.getTime()) ? Date.now() : startedAt.getTime();
+    const totalMs   = attempt.duration_minutes_allotted * 60 * 1000;
+    const usedMs    = Math.max(0, Date.now() - startMs);
+    const remMs     = Math.max(30000, totalMs - usedMs); // at least 30 seconds
+
+    // Build subjects in order
+    const subjects = [], seen = {};
+    questions.forEach(q => { if (!seen[q.subject]) { seen[q.subject] = true; subjects.push(q.subject); }});
+
+    // Build answer map
+    const answers = {};
+    (attempt.answers || []).forEach(a => { answers[a.question_id] = {sel: a.selected_answer||null, status: a.status||'NOT_VISITED', time: a.time_spent_seconds||0}; });
+    questions.forEach(q => { if (!answers[q.id]) answers[q.id] = {sel:null, status:'NOT_VISITED', time:0}; });
+
+    // Set global state ONCE
+    window._ES = {
+      id: attempt.id, qs: questions, answers, cur: 0,
+      qTimer: Date.now(), dur: attempt.duration_minutes_allotted,
+      endTime: Date.now() + remMs, timer: null, subjects,
+      readonly: window._ES.readonly, camId,
+      camInterval: null, camStream: null, micStream: null,
+      neetMode: opts.neet_mode || false
     };
 
-    // Populate answer map from existing state
-    (attempt.answers || []).forEach(a => {
-      _E.answers[a.question_id] = { sel: a.selected_answer, status: a.status || 'NOT_VISITED', time: a.time_spent_seconds || 0 };
-    });
-    questions.forEach(q => {
-      if (!_E.answers[q.id]) _E.answers[q.id] = { sel: null, status: 'NOT_VISITED', time: 0 };
-    });
-
-    _buildExamUI(opts.title || 'Exam');
-
-    if (!_E.readonly) {
-      _startTimer();
-      if (opts.camera) _startCamera();
-      if (opts.mic)    _startMic();
+    _examBuild(opts.title || 'Exam');
+    if (!window._ES.readonly) {
+      _timerStart();
+      if (opts.camera) _camStart().catch(console.warn);
+      if (opts.mic)    _micStart().catch(console.warn);
     }
 
-  } catch (e) {
-    overlay.style.display = 'none';
-    toast('Failed to load exam: ' + e.message, 'err', 5000);
-    console.error('examLaunch error:', e);
+  } catch(e) {
+    document.getElementById('exam-overlay').style.display = 'none';
+    toast('Could not load exam: ' + e.message, 'err', 7000);
+    console.error('examLaunch:', e);
   }
 }
 
-function _askProctoring() {
-  return new Promise(resolve => {
-    openModal('Proctoring Options',
-      `<div class="modal-body-pad" style="text-align:center">
-        <div style="font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:8px">Enable proctoring for this test?</div>
-        <div style="font-size:12px;color:var(--c-text3);margin-bottom:20px">Camera and microphone are optional. Your device will request permission.</div>
-        <div style="display:flex;flex-direction:column;gap:10px;max-width:280px;margin:0 auto">
-          <button class="btn btn-secondary" onclick="window._procRes({camera:false,mic:false});closeModal()">No proctoring — just take the test</button>
-          <button class="btn btn-secondary" onclick="window._procRes({camera:true,mic:false});closeModal()">Enable camera only</button>
-          <button class="btn btn-secondary" onclick="window._procRes({camera:true,mic:true});closeModal()">Enable camera and microphone</button>
-        </div>
-      </div>`,
-      '<button class="btn btn-primary" onclick="window._procRes({camera:false,mic:false});closeModal()">Continue without proctoring</button>'
-    );
-    window._procRes = resolve;
-  });
-}
+// ═══════════════════════════════════════════════════════════════════════════
+//  BUILD EXAM UI
+// ═══════════════════════════════════════════════════════════════════════════
+function _examBuild(title) {
+  const ro   = window._ES.readonly;
+  const neet = window._ES.neetMode;
+  const camRec = window._ES.camId ? `<div style="display:flex;align-items:center;gap:5px;padding:3px 10px;background:rgba(239,68,68,.2);border-radius:99px;border:1px solid rgba(239,68,68,.4)"><div style="width:7px;height:7px;border-radius:50%;background:#ef4444;animation:blink 1s step-start infinite"></div><span style="font-size:10px;font-weight:700;color:#fca5a5">REC</span></div>` : '';
+  const timerOrMode = ro
+    ? `<span style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);padding:4px 14px;border-radius:99px;font-size:11px;font-weight:700;border:1px solid rgba(255,255,255,.2)">REVIEW MODE</span>`
+    : `<div class="exam-timer-box" id="exam-timer">--:--</div>`;
 
-// ─── Build exam UI ────────────────────────────────────────────────────────────
-function _buildExamUI(title) {
-  const ro = _E.readonly;
   document.getElementById('exam-overlay').innerHTML = `
     <div class="exam-topbar">
-      <button onclick="_examExit()" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">Exit</button>
+      <button onclick="_examExit()" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">Exit</button>
       <div class="exam-topbar-title">${title}</div>
-      <div style="display:flex;align-items:center;gap:8px">
-        ${_E.camId ? '<div style="display:flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(239,68,68,.2);border-radius:99px;border:1px solid rgba(239,68,68,.4)"><div style="width:7px;height:7px;border-radius:50%;background:#ef4444;animation:blink 1s step-start infinite"></div><span style="font-size:10px;font-weight:700;color:#fca5a5">REC</span></div>' : ''}
-        ${ro ? '<span style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;border:1px solid rgba(255,255,255,.2)">REVIEW MODE</span>'
-             : '<div class="exam-timer-box" id="exam-timer">--:--</div>'}
-        <button onclick="_openOMROverlay()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer" title="Open OMR Sheet">OMR</button>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        ${camRec}${timerOrMode}
+        <button onclick="_omrOpen()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">OMR</button>
       </div>
     </div>
+    ${neet ? _neetLayout() : _jeeLayout(ro)}`;
+
+  _renderChips();
+  _renderPalette();
+  // Defer _goQ to next tick so DOM is fully painted
+  setTimeout(() => _goQ(0), 10);
+}
+
+function _jeeLayout(ro) {
+  const submitBtn = ro ? '' : `<div class="palette-submit"><button class="btn btn-danger" style="width:100%;padding:10px;font-size:13px;font-weight:700" onclick="_submitConfirm()">Submit Test</button></div>`;
+  return `
     <div class="exam-body">
       <div class="exam-q-panel">
         <div class="exam-q-toolbar">
@@ -146,381 +126,418 @@ function _buildExamUI(title) {
           <div class="palette-legend" id="pal-legend"></div>
         </div>
         <div class="palette-grid-wrap" id="pal-grid"></div>
-        ${ro ? '' : `<div class="palette-submit"><button class="btn btn-danger" style="width:100%;font-size:13px;padding:10px" onclick="_confirmSubmit()">Submit Test</button></div>`}
+        ${submitBtn}
       </div>
     </div>`;
-
-  _renderSubjChips();
-  _renderPalette();
-  _goQ(0);
 }
 
-// ─── Subject tabs ─────────────────────────────────────────────────────────────
-function _renderSubjChips() {
+function _neetLayout() {
+  return `
+    <div style="flex:1;display:grid;grid-template-columns:1fr 340px;overflow:hidden;min-height:0">
+      <div style="display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--c-border)">
+        <div class="exam-q-toolbar">
+          <div id="subj-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+          <div class="q-progress" id="q-prog"></div>
+        </div>
+        <div class="exam-q-scroll"><div id="exam-qarea"></div></div>
+        <div class="exam-footer" id="exam-footer"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;overflow:hidden;background:var(--c-surface)">
+        <div style="padding:10px 12px;background:var(--c-surface2);border-bottom:1px solid var(--c-border);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--c-text4)">OMR Answer Sheet</div>
+        <div style="flex:1;overflow-y:auto;padding:8px 12px" id="neet-omr-panel"></div>
+        <div style="padding:10px;border-top:1px solid var(--c-border)">
+          <button class="btn btn-danger" style="width:100%;padding:9px;font-weight:700" onclick="_submitConfirm()">Submit Test</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════
+function _renderChips() {
   const el = document.getElementById('subj-chips'); if (!el) return;
-  const curSubj = _E.qs[_E.cur]?.subject;
-  el.innerHTML = _E.subjects.map(s =>
-    `<button class="subject-chip ${s === curSubj ? 'active' : ''}" onclick="_jumpSubj('${s}')">${s.charAt(0)+s.slice(1).toLowerCase()}</button>`
+  const cur = window._ES.qs[window._ES.cur];
+  el.innerHTML = window._ES.subjects.map(s =>
+    `<button class="subject-chip ${cur && s===cur.subject?'active':''}" onclick="_jumpSubj('${s}')">${s.charAt(0)+s.slice(1).toLowerCase()}</button>`
   ).join('');
 }
 
-function _jumpSubj(s) {
-  const idx = _E.qs.findIndex(q => q.subject === s);
-  if (idx >= 0) _goQ(idx);
-}
+window._jumpSubj = s => { const i = window._ES.qs.findIndex(q => q.subject===s); if(i>=0) _goQ(i); };
 
-// ─── Navigate to question ──────────────────────────────────────────────────────
 function _goQ(idx) {
-  // Accumulate time on previous question
-  if (_E.cur !== idx || idx === 0) {
-    const curQ = _E.qs[_E.cur];
-    if (curQ && _E.qTimer) {
-      _E.answers[curQ.id].time += Math.round((Date.now() - _E.qTimer) / 1000);
-      if (_E.answers[curQ.id].status === 'NOT_VISITED' && !_E.readonly) {
-        _E.answers[curQ.id].status = 'NOT_ANSWERED';
-        _sendAnswer(curQ.id);
+  const ES = window._ES;
+  if (ES.cur !== idx) {
+    const pq = ES.qs[ES.cur];
+    if (pq && ES.answers[pq.id]) {
+      ES.answers[pq.id].time += Math.round((Date.now()-ES.qTimer)/1000);
+      if (ES.answers[pq.id].status==='NOT_VISITED' && !ES.readonly) {
+        ES.answers[pq.id].status = 'NOT_ANSWERED';
+        _sendAns(pq.id);
       }
     }
   }
-
-  _E.cur    = Math.max(0, Math.min(idx, _E.qs.length - 1));
-  _E.qTimer = Date.now();
-
-  const q = _E.qs[_E.cur];
-  document.getElementById('q-prog').textContent = `${_E.cur + 1} / ${_E.qs.length}`;
-  _renderSubjChips();
+  ES.cur    = Math.max(0, Math.min(idx, ES.qs.length-1));
+  ES.qTimer = Date.now();
+  const q   = ES.qs[ES.cur]; if (!q) return;
+  const pg  = document.getElementById('q-prog');
+  if (pg) pg.textContent = `${ES.cur+1} / ${ES.qs.length}`;
+  _renderChips();
   _renderQ(q);
   _renderFooter(q);
   _renderPalette();
-
-  // Scroll palette button into view
-  setTimeout(() => document.querySelector(`.pq-btn[data-i="${_E.cur}"]`)?.scrollIntoView({ block:'nearest', behavior:'smooth' }), 50);
+  if (ES.neetMode) _renderNeetOMR();
+  setTimeout(() => document.querySelector(`.pq-btn[data-i="${ES.cur}"]`)?.scrollIntoView({block:'nearest',behavior:'smooth'}), 50);
 }
 
-// ─── Render question ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+//  QUESTION RENDER
+// ═══════════════════════════════════════════════════════════════════════════
 function _renderQ(q) {
   const area = document.getElementById('exam-qarea'); if (!area) return;
-  const ans     = _E.answers[q.id] || { sel: null, status: 'NOT_VISITED', time: 0 };
-  const ro      = _E.readonly;
-  const isNum   = q.question_type === 'NUMERICAL';
-  const isMulti = q.question_type === 'MCQ_MULTIPLE';
+  const ES   = window._ES;
+  const ans  = ES.answers[q.id] || {sel:null,status:'NOT_VISITED',time:0};
+  const ro   = ES.readonly;
+  const isNum   = q.question_type==='NUMERICAL';
+  const isMulti = q.question_type==='MCQ_MULTIPLE';
   const opts    = [['A',q.option_a],['B',q.option_b],['C',q.option_c],['D',q.option_d]].filter(([,v])=>v);
   const corr    = new Set((q.correct_answer||'').split(',').map(s=>s.trim()).filter(Boolean));
+  const selSet  = new Set((ans.sel||'').split(',').map(s=>s.trim()).filter(Boolean));
 
-  let qContent = '';
-  if (q.question_text) {
-    qContent += `<div class="q-text">${q.question_text}</div>`;
-  }
+  // Question content
+  let qHtml = '';
+  if (q.question_text) qHtml += `<div class="q-text">${q.question_text}</div>`;
   if (q.question_image_path) {
-    qContent += `<div style="margin-bottom:14px"><img src="/static/uploads/${q.question_image_path.replace('uploads/','')}" style="max-width:100%;border-radius:8px;border:1px solid var(--c-border)" onerror="this.style.display='none'" alt="Question image"></div>`;
+    const src = '/static/uploads/' + q.question_image_path.replace(/^uploads[/\\]/,'');
+    qHtml += `<div style="margin:10px 0"><img src="${src}" style="max-width:100%;border-radius:8px;border:1px solid var(--c-border);display:block" onerror="this.outerHTML='<div style=\\'padding:8px;background:var(--c-surface2);border-radius:6px;font-size:11px;color:var(--c-text4)\\'>Image not found</div>'" alt="Question image"></div>`;
   }
-  if (!qContent) qContent = '<div class="q-text" style="color:var(--c-text4);font-style:italic">Question content not available</div>';
+  if (!qHtml) qHtml = `<div class="q-text" style="color:var(--c-text4);font-style:italic">No question text</div>`;
 
-  let answerHTML = '';
+  // Answer area
+  let ansHtml = '';
   if (isNum) {
-    answerHTML = `<div class="numpad-wrapper">
-      <div class="num-display" id="num-disp">${ans.sel !== null && ans.sel !== '' ? ans.sel : '—'}</div>
+    ansHtml = `<div class="numpad-wrapper">
+      <div class="num-display" id="num-disp">${ans.sel!==null&&ans.sel!==''?ans.sel:'&mdash;'}</div>
       <div class="numpad-grid">
-        ${[7,8,9,'DEL',4,5,6,'±',1,2,3,'.','0','00','C','OK'].map(k =>
-          `<button class="numpad-key ${k==='DEL'||k==='C'?'del':k==='±'||k==='OK'?'fn':''}" onclick="_numKey('${q.id}','${k}')">${k}</button>`).join('')}
+        ${[7,8,9,'DEL',4,5,6,'±',1,2,3,'.','0','00','C','OK'].map(k=>{
+          const cls=(k==='DEL'||k==='C')?'del':(k==='±'||k==='OK')?'fn':'';
+          return `<button class="numpad-key ${cls}" onclick="examNumKey(${q.id},'${k}')">${k}</button>`;
+        }).join('')}
       </div>
     </div>`;
   } else {
-    let optHTML = '';
+    let optsHtml = '';
     opts.forEach(([k,v]) => {
-      const sel = (ans.sel||'').split(',').map(s=>s.trim()).filter(Boolean).includes(k);
+      const isSel = selSet.has(k);
       let cls = '';
-      if (ro) { cls = corr.has(k) ? 'correct' : sel ? 'wrong' : ''; }
-      else     { cls = sel ? 'selected' : ''; }
-      optHTML += `<div class="option-row ${cls}" ${ro?'style="cursor:default"':''} onclick="${ro?'void 0':''}" ${ro?'':'onmousedown="'+_esc(`_pickOpt('${q.id}','${k}',${isMulti})`)+'\"'}>
+      if (ro) cls = corr.has(k)?'correct':isSel?'wrong':'';
+      else    cls = isSel?'selected':'';
+      const click = ro ? '' : `onclick="examPickOpt(${q.id},'${k}',${isMulti})"`;
+      optsHtml += `<div class="option-row ${cls}" ${ro?'style="cursor:default"':''} ${click}>
         <div class="option-key">${k}</div>
         <div class="option-text">${v}</div>
-        ${ro && corr.has(k) ? `<span style="margin-left:auto;color:var(--c-green);display:flex;align-items:center">${IC.chk}</span>` : ''}
+        ${ro&&corr.has(k)?`<span style="margin-left:auto;color:var(--c-green);display:flex">${IC.chk}</span>`:''}
       </div>`;
     });
     if (q.options_image_path) {
-      optHTML += `<img src="/static/uploads/${q.options_image_path.replace('uploads/','')}" style="max-width:100%;margin-top:8px;border-radius:8px;border:1px solid var(--c-border)" onerror="this.style.display='none'" alt="Options">`;
+      const src = '/static/uploads/' + q.options_image_path.replace(/^uploads[/\\]/,'');
+      optsHtml += `<img src="${src}" style="max-width:100%;margin-top:8px;border-radius:8px;border:1px solid var(--c-border)" onerror="this.style.display='none'" alt="Options">`;
     }
-    answerHTML = `<div class="options-list">${optHTML}</div>`;
+    ansHtml = `<div class="options-list">${optsHtml}</div>`;
   }
 
-  let solHTML = '';
+  // Solution (review mode)
+  let solHtml = '';
   if (ro) {
-    solHTML = `<div style="margin-top:14px;padding:12px 14px;background:var(--c-green-l);border-radius:var(--radius-sm);border-left:3px solid var(--c-green)">
-      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--c-green);margin-bottom:6px">Correct Answer: ${q.correct_answer || '—'}</div>
-      ${q.solution_text ? `<div style="font-size:12px;color:var(--c-text2);line-height:1.7">${q.solution_text}</div>` : ''}
-      ${q.solution_image_path ? `<img src="/static/uploads/${q.solution_image_path.replace('uploads/','')}" style="max-width:100%;margin-top:8px;border-radius:6px" onerror="this.style.display='none'" alt="Solution">` : ''}
+    solHtml = `<div style="margin-top:14px;padding:12px 14px;background:var(--c-green-l);border-radius:var(--radius-sm);border-left:3px solid var(--c-green)">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--c-green);margin-bottom:6px">Answer: ${q.correct_answer||'—'}</div>
+      ${q.solution_text?`<div style="font-size:12px;color:var(--c-text2);line-height:1.7">${q.solution_text}</div>`:''}
+      ${q.solution_image_path?`<img src="/static/uploads/${q.solution_image_path.replace(/^uploads[/\\]/,'')}" style="max-width:100%;margin-top:8px;border-radius:6px" onerror="this.style.display='none'" alt="Solution">`:''}
     </div>`;
   }
 
   area.innerHTML = `<div class="exam-q-card fade-in">
     <div class="q-num-row">
       <span class="q-num-pill">Q${q.question_number}</span>
-      ${isMulti ? '<span class="q-type-pill">Multiple Correct</span>' : ''}
-      ${isNum   ? '<span class="q-type-pill">Numerical</span>' : ''}
+      ${isMulti?'<span class="q-type-pill">Multiple Correct</span>':''}
+      ${isNum?'<span class="q-type-pill">Numerical</span>':''}
       <span class="q-marks-pill">+${q.marks_correct} / ${q.marks_incorrect}</span>
     </div>
-    ${qContent}
-    ${answerHTML}
-    ${solHTML}
+    ${qHtml}${ansHtml}${solHtml}
   </div>`;
 }
 
-function _esc(s) { return s.replace(/"/g, '&quot;'); }
-
-// ─── Answer interactions ──────────────────────────────────────────────────────
-function _pickOpt(qId, key, isMulti) {
-  if (_E.readonly) return;
-  const ans = _E.answers[qId];
-  if (!ans) return;
+// Global handlers (must be on window for onclick= in innerHTML to work)
+window.examPickOpt = function(qId, key, isMulti) {
+  const ES = window._ES; if (ES.readonly) return;
+  const ans = ES.answers[qId]; if (!ans) return;
   if (isMulti) {
     const sel = new Set((ans.sel||'').split(',').map(s=>s.trim()).filter(Boolean));
     sel.has(key) ? sel.delete(key) : sel.add(key);
     ans.sel = [...sel].sort().join(',') || null;
   } else {
-    ans.sel = (ans.sel === key) ? null : key;
+    ans.sel = (ans.sel===key) ? null : key;
   }
   ans.status = ans.sel ? 'ANSWERED' : 'NOT_ANSWERED';
-  _sendAnswer(qId);
-  _renderQ(_E.qs[_E.cur]);
+  _sendAns(qId);
+  _renderQ(ES.qs[ES.cur]);
   _renderPalette();
-}
+  if (ES.neetMode) _renderNeetOMR();
+};
 
-function _numKey(qId, k) {
-  if (_E.readonly) return;
-  const ans = _E.answers[qId]; if (!ans) return;
+window.examNumKey = function(qId, k) {
+  const ES = window._ES; if (ES.readonly) return;
+  const ans = ES.answers[qId]; if (!ans) return;
   let v = ans.sel || '';
-  if (k==='C')        v = '';
-  else if (k==='DEL') v = v.slice(0, -1);
-  else if (k==='±')   v = v.startsWith('-') ? v.slice(1) : '-' + v;
-  else if (k==='OK')  { _saveAndNext(); return; }
-  else if (k==='.' && v.includes('.')) return;
-  else v += k;
-  ans.sel    = v || null;
-  ans.status = v ? 'ANSWERED' : 'NOT_ANSWERED';
-  const d = document.getElementById('num-disp');
-  if (d) d.textContent = v || '—';
-  _sendAnswer(qId);
-  _renderPalette();
-}
+  if      (k==='C')   v='';
+  else if (k==='DEL') v=v.slice(0,-1);
+  else if (k==='±')   v=v.startsWith('-')?v.slice(1):('-'+v);
+  else if (k==='OK')  { window._saveNext(); return; }
+  else if (k==='.'&&v.includes('.')) return;
+  else v+=k;
+  ans.sel    = v||null;
+  ans.status = v?'ANSWERED':'NOT_ANSWERED';
+  const d=document.getElementById('num-disp'); if(d) d.textContent=v||'—';
+  _sendAns(qId); _renderPalette();
+};
 
-function _clearResp(qId) {
-  const ans = _E.answers[qId]; if (!ans) return;
-  ans.sel = null; ans.status = 'NOT_ANSWERED';
-  _sendAnswer(qId); _renderQ(_E.qs[_E.cur]); _renderPalette();
-}
-
-function _markReview(qId) {
-  const ans = _E.answers[qId]; if (!ans) return;
-  ans.status = ans.sel ? 'ANSWERED_AND_MARKED' : 'MARKED_FOR_REVIEW';
-  _sendAnswer(qId); _renderPalette(); _goQ(_E.cur + 1);
-}
-
-function _saveAndNext() {
-  const q = _E.qs[_E.cur]; if (!q) return;
-  const ans = _E.answers[q.id];
-  if (ans && ans.sel) ans.status = 'ANSWERED';
-  _sendAnswer(q.id);
-  _goQ(_E.cur + 1);
-}
-
-// ─── Footer actions ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+//  FOOTER ACTIONS
+// ═══════════════════════════════════════════════════════════════════════════
 function _renderFooter(q) {
-  const el = document.getElementById('exam-footer'); if (!el) return;
-  const ro = _E.readonly;
-  const isFirst = _E.cur === 0, isLast = _E.cur === _E.qs.length - 1;
+  const el=document.getElementById('exam-footer'); if(!el) return;
+  const ES=window._ES, ro=ES.readonly, f=ES.cur===0, l=ES.cur===ES.qs.length-1;
   if (ro) {
-    el.innerHTML = `
-      <button class="btn btn-secondary btn-sm" onclick="_goQ(${_E.cur-1})" ${isFirst?'disabled':''}>Previous</button>
-      <div style="flex:1"></div>
-      <button class="btn btn-primary btn-sm" onclick="_goQ(${_E.cur+1})" ${isLast?'disabled':''}>Next</button>`;
+    el.innerHTML=`<button class="btn btn-secondary btn-sm" onclick="_goQ(${ES.cur-1})" ${f?'disabled':''}>Previous</button><div style="flex:1"></div><button class="btn btn-primary btn-sm" onclick="_goQ(${ES.cur+1})" ${l?'disabled':''}>Next</button>`;
   } else {
-    el.innerHTML = `
-      <button class="btn btn-secondary btn-sm" onclick="_clearResp('${q.id}')">Clear</button>
-      <button class="btn btn-sm" style="background:var(--q-marked);color:#fff;border:none" onclick="_markReview('${q.id}')">Mark for Review</button>
+    el.innerHTML=`
+      <button class="btn btn-secondary btn-sm" onclick="window._clearR(${q.id})">Clear</button>
+      <button class="btn btn-sm" style="background:var(--q-marked);color:#fff;border:none" onclick="window._markR(${q.id})">Mark for Review</button>
       <div style="flex:1"></div>
-      <button class="btn btn-secondary btn-sm" onclick="_goQ(${_E.cur-1})" ${isFirst?'disabled':''}>Prev</button>
-      <button class="btn btn-primary btn-sm" onclick="_saveAndNext()">Save &amp; Next</button>`;
+      <button class="btn btn-secondary btn-sm" onclick="_goQ(${ES.cur-1})" ${f?'disabled':''}>Prev</button>
+      <button class="btn btn-primary btn-sm" onclick="window._saveNext()">Save &amp; Next</button>`;
   }
 }
 
-// ─── Palette ──────────────────────────────────────────────────────────────────
+window._clearR = qId => { const a=window._ES.answers[qId]; if(!a) return; a.sel=null; a.status='NOT_ANSWERED'; _sendAns(qId); _renderQ(window._ES.qs[window._ES.cur]); _renderPalette(); };
+window._markR  = qId => { const a=window._ES.answers[qId]; if(!a) return; a.status=a.sel?'ANSWERED_AND_MARKED':'MARKED_FOR_REVIEW'; _sendAns(qId); _renderPalette(); _goQ(window._ES.cur+1); };
+window._saveNext = () => { const q=window._ES.qs[window._ES.cur]; if(!q) return; const a=window._ES.answers[q.id]; if(a&&a.sel) a.status='ANSWERED'; _sendAns(q.id); _goQ(window._ES.cur+1); };
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PALETTE
+// ═══════════════════════════════════════════════════════════════════════════
 function _renderPalette() {
-  const leg  = document.getElementById('pal-legend');
-  const grid = document.getElementById('pal-grid');
-  if (!leg || !grid) return;
-
-  const counts = { NOT_VISITED:0, NOT_ANSWERED:0, ANSWERED:0, MARKED_FOR_REVIEW:0, ANSWERED_AND_MARKED:0 };
-  Object.values(_E.answers).forEach(a => { if (a && counts[a.status] !== undefined) counts[a.status]++; });
-
-  leg.innerHTML = `
-    <div class="legend-row"><div class="legend-dot ans"></div>${counts.ANSWERED} Answered</div>
-    <div class="legend-row"><div class="legend-dot na"></div>${counts.NOT_ANSWERED} Not Answered</div>
-    <div class="legend-row"><div class="legend-dot mrk"></div>${counts.MARKED_FOR_REVIEW + counts.ANSWERED_AND_MARKED} Marked</div>
-    <div class="legend-row"><div class="legend-dot nv"></div>${counts.NOT_VISITED} Not Visited</div>`;
-
-  const bySubj = {};
-  _E.qs.forEach((q,i) => { if (!bySubj[q.subject]) bySubj[q.subject]=[]; bySubj[q.subject].push({q,i}); });
-
-  grid.innerHTML = Object.entries(bySubj).map(([s, items]) => `
+  const leg=document.getElementById('pal-legend'), grid=document.getElementById('pal-grid');
+  if (!leg||!grid) return;
+  const ES=window._ES;
+  const cnt={NOT_VISITED:0,NOT_ANSWERED:0,ANSWERED:0,MARKED_FOR_REVIEW:0,ANSWERED_AND_MARKED:0};
+  Object.values(ES.answers).forEach(a=>{if(a&&cnt[a.status]!==undefined)cnt[a.status]++;});
+  leg.innerHTML=`
+    <div class="legend-row"><div class="legend-dot ans"></div>${cnt.ANSWERED} Answered</div>
+    <div class="legend-row"><div class="legend-dot na"></div>${cnt.NOT_ANSWERED} Not Ans.</div>
+    <div class="legend-row"><div class="legend-dot mrk"></div>${cnt.MARKED_FOR_REVIEW+cnt.ANSWERED_AND_MARKED} Marked</div>
+    <div class="legend-row"><div class="legend-dot nv"></div>${cnt.NOT_VISITED} Not Visited</div>`;
+  const byS={}, sOrd=[];
+  ES.qs.forEach((q,i)=>{if(!byS[q.subject]){byS[q.subject]=[];sOrd.push(q.subject);}byS[q.subject].push({q,i});});
+  grid.innerHTML=sOrd.map(s=>`
     <div class="palette-subj-label">${s.charAt(0)+s.slice(1).toLowerCase()}</div>
     <div class="palette-buttons">
-      ${items.map(({q,i}) => {
-        const a  = _E.answers[q.id];
-        const st = a?.status || 'NOT_VISITED';
-        const cls= st==='ANSWERED'?'ans':st==='NOT_ANSWERED'?'na':st==='MARKED_FOR_REVIEW'?'mrk':st==='ANSWERED_AND_MARKED'?'am':'nv';
-        return `<button class="pq-btn ${cls} ${i===_E.cur?'cur':''}" data-i="${i}" onclick="_goQ(${i})">${i+1}</button>`;
+      ${byS[s].map(({q,i})=>{
+        const a=ES.answers[q.id],st=a?a.status:'NOT_VISITED';
+        const c=st==='ANSWERED'?'ans':st==='NOT_ANSWERED'?'na':st==='MARKED_FOR_REVIEW'?'mrk':st==='ANSWERED_AND_MARKED'?'am':'nv';
+        return `<button class="pq-btn ${c}${i===ES.cur?' cur':''}" data-i="${i}" onclick="_goQ(${i})">${i+1}</button>`;
       }).join('')}
     </div>`).join('');
 }
 
-// ─── OMR overlay from exam ────────────────────────────────────────────────────
-function _openOMROverlay() {
-  if (_E.qs.length) {
-    OMR.open(_E.qs, _E.answers, (qId, ans) => {
-      _E.answers[qId] = ans;
-      _sendAnswer(qId);
-      _renderPalette();
-      if (_E.qs[_E.cur]?.id === qId) _renderQ(_E.qs[_E.cur]);
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEET OMR PANEL
+// ═══════════════════════════════════════════════════════════════════════════
+function _renderNeetOMR() {
+  const p=document.getElementById('neet-omr-panel'); if(!p) return;
+  const ES=window._ES;
+  const mcq=ES.qs.filter(q=>q.question_type!=='NUMERICAL');
+  const num=ES.qs.filter(q=>q.question_type==='NUMERICAL');
+  let h='';
+  if(mcq.length){
+    h+='<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--c-text4);margin-bottom:6px">Multiple Choice</div>';
+    mcq.forEach(q=>{
+      const a=ES.answers[q.id]||{sel:null};
+      const sel=new Set((a.sel||'').split(',').map(s=>s.trim()).filter(Boolean));
+      h+=`<div style="display:flex;align-items:center;gap:5px;padding:3px 0;border-bottom:1px solid var(--c-border)">
+        <span style="font-size:10px;font-weight:700;width:30px;text-align:right;color:var(--c-text3);flex-shrink:0">Q${q.question_number}.</span>
+        ${['A','B','C','D'].map(o=>{
+          const f=sel.has(o);
+          return `<div onclick="neetBubble(${q.id},'${o}')" style="width:22px;height:22px;border-radius:50%;border:2px solid ${f?'#111':'#777'};background:${f?'#111':'#fff'};color:${f?'#fff':'#555'};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;cursor:pointer;user-select:none;flex-shrink:0;transition:all .1s">${o}</div>`;
+        }).join('')}
+      </div>`;
     });
   }
+  if(num.length){
+    h+='<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--c-text4);margin:10px 0 6px">Numerical</div>';
+    num.forEach(q=>{
+      const a=ES.answers[q.id]||{sel:null};
+      const idx=ES.qs.indexOf(q);
+      h+=`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--c-border)">
+        <span style="font-size:10px;font-weight:700;width:30px;text-align:right;color:var(--c-text3);flex-shrink:0">Q${q.question_number}.</span>
+        <div onclick="_goQ(${idx})" style="flex:1;padding:3px 8px;border:1.5px solid var(--c-border);border-radius:4px;font-family:monospace;font-size:11px;font-weight:700;color:var(--c-blue);cursor:pointer;min-width:60px;background:var(--c-surface2)">${a.sel||'—'}</div>
+      </div>`;
+    });
+  }
+  p.innerHTML=h;
 }
 
-// ─── Timer ────────────────────────────────────────────────────────────────────
-function _startTimer() {
-  if (_E.timer) clearInterval(_E.timer);
-  _E.timer = setInterval(() => {
-    const rem = Math.max(0, _E.endTime - Date.now());
-    const m   = Math.floor(rem / 60000);
-    const s   = Math.floor((rem % 60000) / 1000);
-    const el  = document.getElementById('exam-timer'); if (!el) { clearInterval(_E.timer); return; }
-    el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    el.className   = 'exam-timer-box' + (m < 5 ? ' crit' : m < 15 ? ' warn' : '');
-    if (rem <= 0) { clearInterval(_E.timer); _doSubmit(true); }
+window.neetBubble = function(qId, opt) {
+  const ES=window._ES; const a=ES.answers[qId]; if(!a) return;
+  const q=ES.qs.find(q=>q.id===qId);
+  const isMulti=q&&q.question_type==='MCQ_MULTIPLE';
+  window.examPickOpt(qId, opt, isMulti);
+  _renderNeetOMR();
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  OMR MODAL
+// ═══════════════════════════════════════════════════════════════════════════
+window._omrOpen = function() {
+  if (window._ES.qs.length) OMR.open(window._ES.qs, window._ES.answers, function(qId,ans) {
+    window._ES.answers[qId]=ans; _sendAns(qId); _renderPalette();
+    const c=window._ES.qs[window._ES.cur]; if(c&&c.id===qId) _renderQ(c);
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  SEND ANSWER
+// ═══════════════════════════════════════════════════════════════════════════
+function _sendAns(qId) {
+  if (window._ES.readonly) return;
+  const a=window._ES.answers[qId]; if(!a) return;
+  const body={question_id:qId, selected_answer:a.sel||null, status:a.status, time_spent_seconds:a.time||0};
+  if (!navigator.onLine) { OQ.push({url:`/api/attempts/${window._ES.id}/answer`,opts:{method:'PATCH',body}}); return; }
+  PATCH(`/api/attempts/${window._ES.id}/answer`, body).catch(()=>{});
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  TIMER
+// ═══════════════════════════════════════════════════════════════════════════
+function _timerStart() {
+  if (window._ES.timer) clearInterval(window._ES.timer);
+  window._ES.timer = setInterval(() => {
+    const rem=Math.max(0, window._ES.endTime-Date.now());
+    const m=Math.floor(rem/60000), s=Math.floor((rem%60000)/1000);
+    const el=document.getElementById('exam-timer');
+    if (!el) return; // Don't clear interval if element missing; page may be rendering
+    el.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    el.className='exam-timer-box'+(m<5?' crit':m<15?' warn':'');
+    if (rem<=0) { clearInterval(window._ES.timer); window._ES.timer=null; _doSubmit(true); }
   }, 1000);
 }
 
-// ─── Camera & Mic ─────────────────────────────────────────────────────────────
-async function _startCamera() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-    _E.camStream = stream;
-    // Show small camera preview
-    const vid = document.createElement('video');
-    vid.srcObject = stream; vid.play(); vid.autoplay = true;
-    vid.style.cssText = 'position:fixed;bottom:70px;right:10px;width:120px;height:90px;border-radius:8px;border:2px solid var(--c-green);z-index:2000;object-fit:cover;';
-    document.body.appendChild(vid);
-    vid.id = 'cam-preview';
-
-    // Snapshots every 30s
-    const canvas = document.createElement('canvas'); canvas.width=320; canvas.height=240;
-    const ctx = canvas.getContext('2d');
-    _E.camInterval = setInterval(() => {
-      ctx.drawImage(vid, 0, 0, 320, 240);
-      const b64 = canvas.toDataURL('image/jpeg', 0.5);
-      if (_E.camId) POST(`/api/camera/${_E.camId}/snapshot`, { image_b64: b64 }).catch(()=>{});
-    }, 30000);
-
-    toast('Camera active', 'ok', 2000);
-  } catch {
-    toast('Camera permission denied — continuing without proctoring', 'warn');
-  }
+// ═══════════════════════════════════════════════════════════════════════════
+//  CAMERA / MIC
+// ═══════════════════════════════════════════════════════════════════════════
+async function _camStart() {
+  const stream = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+  window._ES.camStream=stream;
+  const vid=document.createElement('video'); vid.srcObject=stream; vid.autoplay=true; vid.muted=true;
+  vid.id='_ep_cam'; vid.style.cssText='position:fixed;bottom:72px;right:12px;width:120px;height:90px;border-radius:8px;border:2px solid var(--c-green);z-index:2000;object-fit:cover;box-shadow:0 4px 14px rgba(0,0,0,.35)';
+  document.body.appendChild(vid);
+  const can=document.createElement('canvas'); can.width=320; can.height=240; const ctx=can.getContext('2d');
+  window._ES.camInterval=setInterval(()=>{
+    try{ ctx.drawImage(vid,0,0,320,240); const b64=can.toDataURL('image/jpeg',.5); if(window._ES.camId) POST(`/api/camera/${window._ES.camId}/snapshot`,{image_b64:b64}).catch(()=>{}); }catch{}
+  },30000);
+  toast('Camera active','ok',2000);
 }
 
-async function _startMic() {
-  try {
-    _E.micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    toast('Microphone active', 'ok', 2000);
-  } catch {
-    toast('Microphone permission denied', 'warn');
-  }
+async function _micStart() {
+  window._ES.micStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+  toast('Microphone active','ok',2000);
 }
 
 function _stopMedia() {
-  if (_E.camInterval) { clearInterval(_E.camInterval); _E.camInterval = null; }
-  if (_E.camStream) { _E.camStream.getTracks().forEach(t => t.stop()); _E.camStream = null; }
-  if (_E.micStream) { _E.micStream.getTracks().forEach(t => t.stop()); _E.micStream = null; }
-  const prev = document.getElementById('cam-preview'); if (prev) prev.remove();
-  if (_E.camId) POST(`/api/camera/${_E.camId}/end`, {}).catch(()=>{});
+  try{ if(window._ES.camInterval){clearInterval(window._ES.camInterval);window._ES.camInterval=null;} }catch{}
+  try{ if(window._ES.camStream){window._ES.camStream.getTracks().forEach(t=>t.stop());window._ES.camStream=null;} }catch{}
+  try{ if(window._ES.micStream){window._ES.micStream.getTracks().forEach(t=>t.stop());window._ES.micStream=null;} }catch{}
+  try{ const p=document.getElementById('_ep_cam'); if(p) p.remove(); }catch{}
+  if(window._ES.camId) POST(`/api/camera/${window._ES.camId}/end`,{}).catch(()=>{});
 }
 
-// ─── Send answer ──────────────────────────────────────────────────────────────
-async function _sendAnswer(qId) {
-  if (_E.readonly) return;
-  const ans  = _E.answers[qId]; if (!ans) return;
-  const body = { question_id: qId, selected_answer: ans.sel || null, status: ans.status, time_spent_seconds: ans.time || 0 };
-  if (!navigator.onLine) { OQ.push({ url:`/api/attempts/${_E.id}/answer`, opts:{method:'PATCH',body} }); return; }
-  try { await PATCH(`/api/attempts/${_E.id}/answer`, body); } catch {}
-}
-
-// ─── Submit ───────────────────────────────────────────────────────────────────
-function _confirmSubmit() {
-  const counts = { NOT_ANSWERED:0, NOT_VISITED:0, ANSWERED:0 };
-  Object.values(_E.answers).forEach(a => { if(counts[a.status]!==undefined) counts[a.status]++; });
-  openModal('Submit Test?',
+// ═══════════════════════════════════════════════════════════════════════════
+//  SUBMIT
+// ═══════════════════════════════════════════════════════════════════════════
+window._submitConfirm = function() {
+  const ES=window._ES;
+  const cnt={ANSWERED:0,NOT_ANSWERED:0,NOT_VISITED:0,MARKED_FOR_REVIEW:0};
+  Object.values(ES.answers).forEach(a=>{if(a&&cnt[a.status]!==undefined)cnt[a.status]++;});
+  openModal('Submit Test',
     `<div class="modal-body-pad" style="text-align:center">
-      <div style="font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:16px">Are you sure you want to submit?</div>
+      <div style="font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:16px">Submit this test now?</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
-        <div style="padding:12px;background:var(--c-green-l);border-radius:var(--radius);"><div style="font-size:20px;font-weight:900;color:var(--c-green)">${counts.ANSWERED}</div><div style="font-size:10px;color:var(--c-green);font-weight:700">Answered</div></div>
-        <div style="padding:12px;background:var(--c-red-l);border-radius:var(--radius);"><div style="font-size:20px;font-weight:900;color:var(--c-red)">${counts.NOT_ANSWERED}</div><div style="font-size:10px;color:var(--c-red);font-weight:700">Not Answered</div></div>
-        <div style="padding:12px;background:var(--c-surface2);border-radius:var(--radius);"><div style="font-size:20px;font-weight:900;color:var(--c-text3)">${counts.NOT_VISITED}</div><div style="font-size:10px;color:var(--c-text4);font-weight:700">Not Visited</div></div>
+        <div style="padding:12px;background:var(--c-green-l);border-radius:var(--radius)"><div style="font-size:22px;font-weight:900;color:var(--c-green)">${cnt.ANSWERED}</div><div style="font-size:10px;color:var(--c-green);font-weight:700;margin-top:2px">Answered</div></div>
+        <div style="padding:12px;background:var(--c-red-l);border-radius:var(--radius)"><div style="font-size:22px;font-weight:900;color:var(--c-red)">${cnt.NOT_ANSWERED+cnt.NOT_VISITED}</div><div style="font-size:10px;color:var(--c-red);font-weight:700;margin-top:2px">Unanswered</div></div>
+        <div style="padding:12px;background:var(--c-amber-l);border-radius:var(--radius)"><div style="font-size:22px;font-weight:900;color:var(--c-amber)">${cnt.MARKED_FOR_REVIEW}</div><div style="font-size:10px;color:var(--c-amber);font-weight:700;margin-top:2px">For Review</div></div>
       </div>
-      <div style="font-size:12px;color:var(--c-text4)">Once submitted, you cannot change your answers.</div>
+      <div style="font-size:12px;color:var(--c-text4)">Once submitted you cannot change answers.</div>
     </div>`,
     `<button class="btn btn-secondary" onclick="closeModal()">Continue Test</button>
      <button class="btn btn-danger" onclick="closeModal();_doSubmit(false)">Submit Now</button>`
   );
-}
+};
 
-async function _doSubmit(auto = false) {
-  if (_E.timer) { clearInterval(_E.timer); _E.timer = null; }
+async function _doSubmit(auto) {
+  if (window._ES.timer) { clearInterval(window._ES.timer); window._ES.timer=null; }
   _stopMedia();
-
-  // Save time on current question
-  const curQ = _E.qs[_E.cur];
-  if (curQ) {
-    _E.answers[curQ.id].time += Math.round((Date.now() - _E.qTimer) / 1000);
-    await _sendAnswer(curQ.id);
+  // Flush current question time
+  const q=window._ES.qs[window._ES.cur];
+  if (q&&window._ES.answers[q.id]) {
+    window._ES.answers[q.id].time+=Math.round((Date.now()-window._ES.qTimer)/1000);
+    try { await PATCH(`/api/attempts/${window._ES.id}/answer`,{question_id:q.id,selected_answer:window._ES.answers[q.id].sel||null,status:window._ES.answers[q.id].status,time_spent_seconds:window._ES.answers[q.id].time}); } catch{}
   }
-
-  const overlay = document.getElementById('exam-overlay');
-  overlay.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:14px">
-    <div class="spinner" style="width:40px;height:40px;border-width:3px"></div>
-    <div style="font-size:13px;color:var(--c-text3);font-weight:600">Submitting and calculating results...</div>
-  </div>`;
-
+  const ov=document.getElementById('exam-overlay');
+  ov.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:18px"><div class="spinner" style="width:48px;height:48px;border-width:4px"></div><div style="font-size:14px;font-weight:600;color:var(--c-text3)">Submitting and grading...</div></div>';
   try {
-    const result = await POST(`/api/attempts/${_E.id}/submit`, { auto_submitted: auto });
-    overlay.style.display = 'none';
-    _showResult(result);
-    // Save to local DB
-    try { await DashDB.save(result); } catch {}
-  } catch (e) {
-    overlay.style.display = 'none';
-    toast('Submit failed: ' + e.message, 'err', 5000);
+    const r=await POST(`/api/attempts/${window._ES.id}/submit`,{auto_submitted:!!auto});
+    ov.style.display='none';
+    _showResult(r);
+    try { await DashDB.save(r); } catch{}
+  } catch(e) {
+    ov.style.display='none';
+    toast('Submit failed: '+e.message,'err',8000);
   }
 }
 
-// ─── Exit ─────────────────────────────────────────────────────────────────────
-function _examExit() {
-  if (_E.readonly) {
+// ═══════════════════════════════════════════════════════════════════════════
+//  EXIT
+// ═══════════════════════════════════════════════════════════════════════════
+window._examExit = function() {
+  if (window._ES.readonly) { _stopMedia(); document.getElementById('exam-overlay').style.display='none'; return; }
+  if (confirm('Exit exam? The timer keeps running. You can resume by re-opening the same test.')) {
+    if (window._ES.timer) clearInterval(window._ES.timer);
     _stopMedia();
-    document.getElementById('exam-overlay').style.display = 'none';
-    return;
+    document.getElementById('exam-overlay').style.display='none';
   }
-  if (confirm('Exit exam? Your current answers are saved and the timer continues.')) {
-    if (_E.timer) clearInterval(_E.timer);
-    _stopMedia();
-    document.getElementById('exam-overlay').style.display = 'none';
-  }
-}
+};
 
-// ─── Result screen ────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+//  RESULT
+// ═══════════════════════════════════════════════════════════════════════════
 function _showResult(r) {
-  const el  = document.getElementById('page-content');
-  const pct = r.percentage ?? (r.max_score > 0 ? (r.score/r.max_score*100).toFixed(1) : 0);
-
-  el.innerHTML = `<div style="max-width:680px;margin:0 auto" class="fade-in">
+  const el=document.getElementById('page-content');
+  const pct=r.percentage||(r.max_score>0?(r.score/r.max_score*100).toFixed(1):0);
+  let bk='';
+  if (r.subject_breakdown&&Object.keys(r.subject_breakdown).length) {
+    bk=`<div class="card" style="margin-top:16px"><div class="card-body">
+      <div style="font-size:12px;font-weight:800;color:var(--c-text);margin-bottom:12px">Subject Breakdown</div>
+      <table class="data-table"><thead><tr><th>Subject</th><th>Correct</th><th>Wrong</th><th>Skipped</th><th style="text-align:right">Score</th></tr></thead>
+      <tbody>${Object.entries(r.subject_breakdown).map(([s,b])=>`
+        <tr><td style="font-weight:600">${s.charAt(0)+s.slice(1).toLowerCase()}</td>
+        <td style="color:var(--c-green);font-weight:700">${b.correct||0}</td>
+        <td style="color:var(--c-red);font-weight:700">${b.incorrect||0}</td>
+        <td style="color:var(--c-text3)">${b.unattempted||0}</td>
+        <td style="text-align:right;font-weight:800;color:var(--c-blue)">${Number(b.score||0).toFixed(1)}</td></tr>`).join('')}
+      </tbody></table>
+    </div></div>`;
+  }
+  el.innerHTML=`<div style="max-width:680px;margin:0 auto" class="fade-in">
     <div class="result-hero">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;opacity:.75;margin-bottom:10px">Test Complete</div>
       <div class="result-score-num">${Number(r.score).toFixed(1)}</div>
@@ -535,31 +552,12 @@ function _showResult(r) {
       <div class="result-cell"><div class="result-cell-val">${Math.floor(r.time_taken_seconds/60)}m ${r.time_taken_seconds%60}s</div><div class="result-cell-lbl">Time</div></div>
       <div class="result-cell"><div class="result-cell-val" style="color:${Number(pct)>=35?'var(--c-green)':'var(--c-red)'}">${Number(pct)>=35?'Pass':'Fail'}</div><div class="result-cell-lbl">Result</div></div>
     </div>
-    ${_subjBreakdown(r.subject_breakdown)}
+    ${bk}
     <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:20px">
-      <button class="btn btn-primary" onclick="examLaunch({...window._lastExamOpts,readonly:true,attempt_id:${r.attempt_id}})">View Solutions</button>
+      <button class="btn btn-primary" onclick="examLaunch(Object.assign({},window._lastExamOpts,{readonly:true,attempt_id:${r.attempt_id}}))">View Solutions</button>
       <button class="btn btn-secondary" onclick="go('leaderboard')">Leaderboard</button>
       <button class="btn btn-secondary" onclick="go('dashboard')">Dashboard</button>
       <button class="btn btn-secondary" onclick="go('pyq')">More Tests</button>
     </div>
   </div>`;
-}
-
-function _subjBreakdown(breakdown) {
-  if (!breakdown || !Object.keys(breakdown).length) return '';
-  return `<div class="card" style="margin-top:16px"><div class="card-body">
-    <div style="font-size:12px;font-weight:800;color:var(--c-text);margin-bottom:12px">Subject Breakdown</div>
-    <table class="data-table">
-      <thead><tr><th>Subject</th><th>Correct</th><th>Wrong</th><th>Skipped</th><th style="text-align:right">Score</th></tr></thead>
-      <tbody>${Object.entries(breakdown).map(([s,b])=>`
-        <tr>
-          <td style="font-weight:600">${s.charAt(0)+s.slice(1).toLowerCase()}</td>
-          <td style="color:var(--c-green);font-weight:700">${b.correct||0}</td>
-          <td style="color:var(--c-red);font-weight:700">${b.incorrect||0}</td>
-          <td style="color:var(--c-text3)">${b.unattempted||0}</td>
-          <td style="text-align:right;font-weight:800;color:var(--c-blue)">${Number(b.score||0).toFixed(1)}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>
-  </div></div>`;
 }
