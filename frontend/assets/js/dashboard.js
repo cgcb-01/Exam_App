@@ -75,15 +75,15 @@ function _drawDash(el, results, myRank) {
         <div style="font-size:36px;font-weight:900;letter-spacing:-1px;color:${rInfo.color==='#fff'?'#fff':rInfo.color}">${myRating}</div>
         <div style="font-size:12px;font-weight:700;opacity:.8">${rInfo.title}</div>
       </div>
-      <div style="width:1px;height:50px;background:rgba(255,255,255,.2)"></div>
+      <div style="width:1px;height:50px;background:rgba(255, 255, 255, 0.12)"></div>
       <div><div style="font-size:10px;font-weight:700;opacity:.7;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Overall Rank</div><div style="font-size:28px;font-weight:900">#${myRank.overall_rank||'—'}</div></div>
-      <div style="width:1px;height:50px;background:rgba(255,255,255,.2)"></div>
+      <div style="width:1px;height:50px;background:rgba(255, 255, 255, 0.12)"></div>
       <div><div style="font-size:10px;font-weight:700;opacity:.7;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Streak</div><div style="font-size:28px;font-weight:900;color:#fcd34d">${myRank.streak_days||0}d</div></div>
-      <div style="width:1px;height:50px;background:rgba(255,255,255,.2)"></div>
+      <div style="width:1px;height:50px;background:rgba(255, 255, 255, 0.12)"></div>
       <div><div style="font-size:10px;font-weight:700;opacity:.7;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Solved</div><div style="font-size:28px;font-weight:900">${myRank.total_questions||0}</div></div>
       <div style="margin-left:auto;text-align:right">
         <div style="font-size:10px;opacity:.7;margin-bottom:8px">Progress to next tier</div>
-        <div style="width:160px;height:6px;background:rgba(255,255,255,.2);border-radius:99px;overflow:hidden">
+        <div style="width:160px;height:6px;background:rgba(255, 255, 255, 0.13);border-radius:99px;overflow:hidden">
           <div style="height:100%;width:${Math.min((myRating/3000)*100,100)}%;background:#fff;border-radius:99px"></div>
         </div>
         <div style="font-size:10px;opacity:.6;margin-top:4px">${myRating} / ${rInfo.max}</div>
@@ -157,7 +157,7 @@ function _stats(results) {
 }
 
 function _subjProgress(bySubj) {
-  const cols = { PHYSICS:'#2563eb', CHEMISTRY:'#059669', MATHS:'#d97706', BIOLOGY:'#db2777' };
+  const cols = { PHYSICS:'#2563eb', CHEMISTRY:'#05961d', MATHS:'#ed8003', BIOLOGY:'#db2777' };
   const entries = Object.entries(bySubj);
   if (!entries.length) return '<div style="font-size:12px;color:var(--c-text4);padding:8px 0">No data yet. Start attempting tests.</div>';
   return entries.map(([s, d]) => {
@@ -216,7 +216,7 @@ function _drawSubjPie(bySubj) {
   const ctx=canvas.getContext('2d');
   const entries=Object.entries(bySubj).filter(([,d])=>d.t>0);
   if (!entries.length) { ctx.fillStyle=document.documentElement.getAttribute('data-theme')==='dark'?'#64748b':'#94a3b8'; ctx.font='12px Inter'; ctx.textAlign='center'; ctx.fillText('No data yet',W/2,H/2); return; }
-  const colors={PHYSICS:'#2563eb',CHEMISTRY:'#059669',MATHS:'#d97706',BIOLOGY:'#db2777'};
+  const colors={PHYSICS:'#2563eb',CHEMISTRY:'#05961d',MATHS:'#ed8003',BIOLOGY:'#db2777'};
   const total=entries.reduce((s,[,d])=>s+d.t,0);
   const cx=H/2, cy=H/2, r=H/2-10;
   let angle=-Math.PI/2;
