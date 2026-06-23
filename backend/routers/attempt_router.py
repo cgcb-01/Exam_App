@@ -1,5 +1,5 @@
-"""Unified exam-attempt engine — identical UI for JEE/NEET/DPP/Module/Mock."""
-from datetime import datetime
+"""Unified exam-attempt engine."""
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,13 @@ from backend import schemas
 from backend.auth import get_current_user, user_has_active_premium
 
 router = APIRouter(prefix="/api/attempts", tags=["attempts"])
+
+
+def _utc_iso(dt: datetime) -> str:
+    """Return ISO string with Z suffix so JS parses as UTC."""
+    if dt is None:
+        return None
+    return dt.isoformat() + 'Z'
 
 
 def _resolve(payload: schemas.AttemptStart, db: Session):
@@ -34,13 +41,13 @@ def _resolve(payload: schemas.AttemptStart, db: Session):
         if not obj: raise HTTPException(404, "Mock test not found.")
         qs = db.query(Question).filter(Question.mock_test_id == obj.id).order_by(Question.question_number).all()
         return qs, obj.duration_minutes, True
-    raise HTTPException(400, "One source id is required.")
+    raise HTTPException(400, "One of shift_id, dpp_id, module_id, mock_test_id required.")
 
 
 def _grade(attempt: Attempt, db: Session) -> schemas.AttemptResult:
     correct = incorrect = unattempted = 0
     score = max_score = 0.0
-    breakdown: dict = {}
+    breakdown = {}
     for ans in attempt.answers:
         q = db.query(Question).filter(Question.id == ans.question_id).first()
         if not q: continue
@@ -62,7 +69,9 @@ def _grade(attempt: Attempt, db: Session) -> schemas.AttemptResult:
             breakdown[s]["incorrect"] += 1; breakdown[s]["score"] += q.marks_incorrect
     attempt.correct_count = correct; attempt.incorrect_count = incorrect
     attempt.attempted_count = correct + incorrect; attempt.score = score
-    elapsed = int((attempt.submitted_at - attempt.started_at).total_seconds()) if attempt.submitted_at else 0
+    elapsed = 0
+    if attempt.submitted_at and attempt.started_at:
+        elapsed = int((attempt.submitted_at - attempt.started_at).total_seconds())
     pct = (score / max_score * 100) if max_score > 0 else 0.0
     return schemas.AttemptResult(
         attempt_id=attempt.id, total_questions=attempt.total_questions,
@@ -75,61 +84,115 @@ def _grade(attempt: Attempt, db: Session) -> schemas.AttemptResult:
 
 def _match(correct: str, selected: str, qtype: str) -> bool:
     if qtype == "MCQ_MULTIPLE":
-        return set(x.strip().upper() for x in correct.split(",")) == set(x.strip().upper() for x in selected.split(","))
+        return set(x.strip().upper() for x in correct.split(",")) == \
+               set(x.strip().upper() for x in selected.split(","))
     if qtype == "NUMERICAL":
-        try: return abs(float(correct) - float(selected)) < 1e-6
+        try: return abs(float(correct) - float(selected)) < 1e-4
         except: return correct.strip() == selected.strip()
     return correct.strip().upper() == selected.strip().upper()
 
 
-@router.post("/start", response_model=schemas.AttemptOut)
-def start_attempt(payload: schemas.AttemptStart, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def _attempt_response(attempt: Attempt, questions: list, db: Session) -> dict:
+    """Build response dict with UTC-marked timestamps to fix JS timezone bug."""
+    return {
+        "id": attempt.id,
+        "duration_minutes_allotted": attempt.duration_minutes_allotted,
+        "started_at": _utc_iso(attempt.started_at),
+        "status": attempt.status.value,
+        "total_questions": attempt.total_questions,
+        "camera_session_id": attempt.camera_session_id,
+        "questions": [
+            {
+                "id": q.id,
+                "question_number": q.question_number,
+                "subject": q.subject.value,
+                "question_type": q.question_type.value,
+                "question_format": q.question_format.value,
+                "question_text": q.question_text,
+                "question_image_path": q.question_image_path,
+                "question_pdf_path": q.question_pdf_path,
+                "option_a": q.option_a,
+                "option_b": q.option_b,
+                "option_c": q.option_c,
+                "option_d": q.option_d,
+                "options_image_path": q.options_image_path,
+                "marks_correct": q.marks_correct,
+                "marks_incorrect": q.marks_incorrect,
+            }
+            for q in questions
+        ],
+        "answers": [
+            {
+                "id": a.id,
+                "question_id": a.question_id,
+                "selected_answer": a.selected_answer,
+                "status": a.status.value,
+                "time_spent_seconds": a.time_spent_seconds,
+            }
+            for a in attempt.answers
+        ],
+    }
+
+
+@router.post("/start")
+def start_attempt(
+    payload: schemas.AttemptStart,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     questions, duration, needs_premium = _resolve(payload, db)
     if needs_premium and not current_user.is_admin and not user_has_active_premium(current_user, db):
         raise HTTPException(402, "Premium subscription required.")
     if not questions:
         raise HTTPException(400, "No questions in this test yet.")
+
     attempt = Attempt(
-        user_id=current_user.id, shift_id=payload.shift_id, dpp_id=payload.dpp_id,
+        user_id=current_user.id,
+        shift_id=payload.shift_id, dpp_id=payload.dpp_id,
         module_id=payload.module_id, mock_test_id=payload.mock_test_id,
         is_offline_attempt=payload.is_offline_attempt,
-        duration_minutes_allotted=duration, total_questions=len(questions),
-        status=AttemptStatus.IN_PROGRESS, camera_session_id=payload.camera_session_id,
+        duration_minutes_allotted=duration,
+        total_questions=len(questions),
+        status=AttemptStatus.IN_PROGRESS,
+        camera_session_id=payload.camera_session_id,
     )
     db.add(attempt); db.flush()
     for q in questions:
-        db.add(AttemptAnswer(attempt_id=attempt.id, question_id=q.id, status=AnswerStatus.NOT_VISITED))
+        db.add(AttemptAnswer(attempt_id=attempt.id, question_id=q.id,
+                             status=AnswerStatus.NOT_VISITED))
     db.commit(); db.refresh(attempt)
-    return schemas.AttemptOut(
-        id=attempt.id, duration_minutes_allotted=attempt.duration_minutes_allotted,
-        started_at=attempt.started_at, status=attempt.status,
-        total_questions=attempt.total_questions, questions=questions,
-        answers=attempt.answers, camera_session_id=attempt.camera_session_id,
-    )
+    return _attempt_response(attempt, questions, db)
 
 
-@router.get("/{attempt_id}", response_model=schemas.AttemptOut)
-def get_attempt(attempt_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    attempt = db.query(Attempt).filter(Attempt.id == attempt_id, Attempt.user_id == current_user.id).first()
+@router.get("/{attempt_id}")
+def get_attempt(
+    attempt_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    attempt = db.query(Attempt).filter(
+        Attempt.id == attempt_id, Attempt.user_id == current_user.id).first()
     if not attempt: raise HTTPException(404, "Attempt not found.")
     qids = [a.question_id for a in attempt.answers]
     questions = db.query(Question).filter(Question.id.in_(qids)).order_by(Question.question_number).all()
-    return schemas.AttemptOut(
-        id=attempt.id, duration_minutes_allotted=attempt.duration_minutes_allotted,
-        started_at=attempt.started_at, status=attempt.status,
-        total_questions=attempt.total_questions, questions=questions,
-        answers=attempt.answers, camera_session_id=attempt.camera_session_id,
-    )
+    return _attempt_response(attempt, questions, db)
 
 
 @router.patch("/{attempt_id}/answer")
-def upsert_answer(attempt_id: int, payload: schemas.AnswerSubmit,
-                  current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    attempt = db.query(Attempt).filter(Attempt.id == attempt_id, Attempt.user_id == current_user.id).first()
+def upsert_answer(
+    attempt_id: int,
+    payload: schemas.AnswerSubmit,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    attempt = db.query(Attempt).filter(
+        Attempt.id == attempt_id, Attempt.user_id == current_user.id).first()
     if not attempt: raise HTTPException(404, "Attempt not found.")
-    if attempt.status != AttemptStatus.IN_PROGRESS: raise HTTPException(400, "Already submitted.")
+    if attempt.status != AttemptStatus.IN_PROGRESS:
+        raise HTTPException(400, "Already submitted.")
     ans = db.query(AttemptAnswer).filter(
-        AttemptAnswer.attempt_id == attempt_id, AttemptAnswer.question_id == payload.question_id).first()
+        AttemptAnswer.attempt_id == attempt_id,
+        AttemptAnswer.question_id == payload.question_id).first()
     if not ans: raise HTTPException(404, "Question not in this attempt.")
     ans.selected_answer = payload.selected_answer
     ans.status = payload.status
@@ -139,16 +202,21 @@ def upsert_answer(attempt_id: int, payload: schemas.AnswerSubmit,
 
 
 @router.post("/{attempt_id}/submit", response_model=schemas.AttemptResult)
-def submit_attempt(attempt_id: int, payload: schemas.AttemptSubmit,
-                   current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    attempt = db.query(Attempt).filter(Attempt.id == attempt_id, Attempt.user_id == current_user.id).first()
+def submit_attempt(
+    attempt_id: int,
+    payload: schemas.AttemptSubmit,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    attempt = db.query(Attempt).filter(
+        Attempt.id == attempt_id, Attempt.user_id == current_user.id).first()
     if not attempt: raise HTTPException(404, "Attempt not found.")
-    if attempt.status != AttemptStatus.IN_PROGRESS: raise HTTPException(400, "Already submitted.")
+    if attempt.status != AttemptStatus.IN_PROGRESS:
+        raise HTTPException(400, "Already submitted.")
     attempt.submitted_at = datetime.utcnow()
     attempt.status = AttemptStatus.AUTO_SUBMITTED if payload.auto_submitted else AttemptStatus.SUBMITTED
     result = _grade(attempt, db)
     db.commit()
-    # Update leaderboard only for online attempts
     if not attempt.is_offline_attempt:
         try:
             from backend.routers.leaderboard_router import update_leaderboard_after_attempt
@@ -159,34 +227,72 @@ def submit_attempt(attempt_id: int, payload: schemas.AttemptSubmit,
 
 
 @router.get("/{attempt_id}/result", response_model=schemas.AttemptResult)
-def get_result(attempt_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    attempt = db.query(Attempt).filter(Attempt.id == attempt_id, Attempt.user_id == current_user.id).first()
-    if not attempt: raise HTTPException(404, "Attempt not found.")
-    if attempt.status == AttemptStatus.IN_PROGRESS: raise HTTPException(400, "Not yet submitted.")
+def get_result(
+    attempt_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    attempt = db.query(Attempt).filter(
+        Attempt.id == attempt_id, Attempt.user_id == current_user.id).first()
+    if not attempt: raise HTTPException(404)
+    if attempt.status == AttemptStatus.IN_PROGRESS: raise HTTPException(400, "Not submitted yet.")
     return _grade(attempt, db)
 
 
-@router.get("/{attempt_id}/solutions", response_model=list[schemas.QuestionWithSolution])
-def get_solutions(attempt_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    attempt = db.query(Attempt).filter(Attempt.id == attempt_id, Attempt.user_id == current_user.id).first()
-    if not attempt: raise HTTPException(404, "Attempt not found.")
-    if attempt.status == AttemptStatus.IN_PROGRESS: raise HTTPException(400, "Submit the test first.")
+@router.get("/{attempt_id}/solutions")
+def get_solutions(
+    attempt_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    attempt = db.query(Attempt).filter(
+        Attempt.id == attempt_id, Attempt.user_id == current_user.id).first()
+    if not attempt: raise HTTPException(404)
+    if attempt.status == AttemptStatus.IN_PROGRESS: raise HTTPException(400, "Submit first.")
     qids = [a.question_id for a in attempt.answers]
-    return db.query(Question).filter(Question.id.in_(qids)).order_by(Question.question_number).all()
+    questions = db.query(Question).filter(Question.id.in_(qids)).order_by(Question.question_number).all()
+    return [
+        {
+            "id": q.id, "question_number": q.question_number,
+            "subject": q.subject.value, "question_type": q.question_type.value,
+            "question_format": q.question_format.value,
+            "question_text": q.question_text,
+            "question_image_path": q.question_image_path,
+            "question_pdf_path": q.question_pdf_path,
+            "option_a": q.option_a, "option_b": q.option_b,
+            "option_c": q.option_c, "option_d": q.option_d,
+            "options_image_path": q.options_image_path,
+            "marks_correct": q.marks_correct, "marks_incorrect": q.marks_incorrect,
+            "correct_answer": q.correct_answer,
+            "solution_format": q.solution_format.value,
+            "solution_text": q.solution_text,
+            "solution_image_path": q.solution_image_path,
+            "solution_pdf_path": q.solution_pdf_path,
+        }
+        for q in questions
+    ]
 
 
 @router.post("/sync-offline", response_model=schemas.AttemptResult)
-def sync_offline(payload: schemas.OfflineAttemptSync,
-                 current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    start_p = schemas.AttemptStart(shift_id=payload.shift_id, dpp_id=payload.dpp_id,
-        module_id=payload.module_id, mock_test_id=payload.mock_test_id, is_offline_attempt=True)
+def sync_offline(
+    payload: schemas.OfflineAttemptSync,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    start_p = schemas.AttemptStart(
+        shift_id=payload.shift_id, dpp_id=payload.dpp_id,
+        module_id=payload.module_id, mock_test_id=payload.mock_test_id,
+        is_offline_attempt=True,
+    )
     questions, duration, needs_premium = _resolve(start_p, db)
     if needs_premium and not current_user.is_admin and not user_has_active_premium(current_user, db):
-        raise HTTPException(402, "Premium subscription required.")
+        raise HTTPException(402, "Premium required.")
     attempt = Attempt(
-        user_id=current_user.id, shift_id=payload.shift_id, dpp_id=payload.dpp_id,
+        user_id=current_user.id,
+        shift_id=payload.shift_id, dpp_id=payload.dpp_id,
         module_id=payload.module_id, mock_test_id=payload.mock_test_id,
-        is_offline_attempt=True, duration_minutes_allotted=payload.duration_minutes_allotted,
+        is_offline_attempt=True,
+        duration_minutes_allotted=payload.duration_minutes_allotted,
         started_at=payload.started_at, submitted_at=payload.submitted_at,
         total_questions=len(questions), status=AttemptStatus.SUBMITTED,
     )
