@@ -1,32 +1,38 @@
 'use strict';
-// ─── Admin panel ───────────────────────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════════════
+   ADMIN PANEL  — Question upload, structure management, stats
+   ═══════════════════════════════════════════════════════════════════ */
+
 registerPage('admin', async function(el) {
   if (!Auth.isAdmin()) { toast('Admin access required','err'); go('home'); return; }
   el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
   let stats = {};
   try { stats = await GET('/api/admin/stats'); } catch {}
-  window._adminStats = stats;
-  _adminPage(el, 'stats');
+  window._adminData = { stats, exams:[], subjects:[], dppSets:[], testSets:[], mockTests:[], chapters:[], modules:[], dpps:[] };
+  await _adminLoadAll();
+  _adminPage(el, 'upload');
 });
 
-let _aTab = 'stats';
+async function _adminLoadAll() {
+  try {
+    const [exams, tracks] = await Promise.all([GET('/api/pyq/exams'), GET('/api/premium/tracks')]);
+    window._adminData.exams    = exams;
+    window._adminData.tracks   = tracks;
+    window._adminData.subjects = tracks.flatMap(t => t.subjects);
+  } catch {}
+}
+
+let _aTab = 'upload';
 
 function _adminPage(el, tab) {
   _aTab = tab;
   el.innerHTML = `<div class="fade-in">
-    <div class="page-header"><div class="page-title">Admin Panel</div><div class="page-sub">Manage content, users, and platform data.</div></div>
+    <div class="page-header"><div class="page-title">Admin Panel</div></div>
     <div style="display:grid;grid-template-columns:200px 1fr;gap:16px;align-items:start">
-      <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--radius-lg);padding:6px;display:flex;flex-direction:column;gap:2px">
-        ${[
-          ['stats','Overview'],
-          ['questions','Add Question'],
-          ['image-q','Upload Image Question'],
-          ['exams','Exam Structure'],
-          ['premium','Premium Structure'],
-          ['media','Media Upload'],
-          ['news','Post News'],
-          ['users','User Stats'],
-        ].map(([k,l])=>`<button onclick="_aSwitch('${k}')" id="atn-${k}" style="padding:8px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;border:none;background:${k===tab?'var(--c-blue-l)':'none'};color:${k===tab?'var(--c-blue)':'var(--c-text3)'};cursor:pointer;text-align:left;width:100%;transition:all .15s">${l}</button>`).join('')}
+      <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--radius-lg);overflow:hidden">
+        ${[['upload','Upload Questions'],['structure','Exam Structure'],['premium-struct','Premium Structure'],['media','Media Upload'],['news','Post News'],['stats','Statistics'],['users','User Activity']].map(([k,l])=>
+          `<button id="atn-${k}" onclick="_aSwitch('${k}')" style="display:block;width:100%;padding:10px 14px;border:none;background:${k===tab?'var(--c-blue-l)':'none'};color:${k===tab?'var(--c-blue)':'var(--c-text3)'};font-size:12px;font-weight:600;text-align:left;cursor:pointer;border-bottom:1px solid var(--c-border)">${l}</button>`
+        ).join('')}
       </div>
       <div id="admin-body" class="fade-in"></div>
     </div>
@@ -38,400 +44,788 @@ function _aSwitch(k) {
   _aTab = k;
   document.querySelectorAll('[id^="atn-"]').forEach(b => {
     const bk = b.id.slice(4);
-    b.style.background = bk===k?'var(--c-blue-l)':'none';
-    b.style.color      = bk===k?'var(--c-blue)':'var(--c-text3)';
+    b.style.background = bk===k ? 'var(--c-blue-l)' : 'none';
+    b.style.color      = bk===k ? 'var(--c-blue)'   : 'var(--c-text3)';
   });
-  _aLoad(k);
+  const b = document.getElementById('admin-body');
+  if (b) { b.className='fade-in'; _aLoad(k); }
 }
 
 function _aLoad(k) {
-  const b = document.getElementById('admin-body'); if(!b) return;
-  const map = {
-    stats: _aStats, questions: _aAddQ, 'image-q': _aImageQ,
-    exams: _aExams, premium: _aPremium, media: _aMedia,
-    news: _aNews, users: _aUsers,
-  };
-  b.className = 'fade-in';
-  (map[k] || _aStats)(b);
+  const b = document.getElementById('admin-body'); if (!b) return;
+  const map = { upload:_aUpload, structure:_aStructure, 'premium-struct':_aPremStruct,
+                media:_aMedia, news:_aNews, stats:_aStats, users:_aUsers };
+  (map[k]||_aStats)(b);
 }
 
-// ── Overview stats ───────────────────────────────────────────────────────────
-function _aStats(el) {
-  const s = window._adminStats || {};
-  el.innerHTML = `
-    <div class="stat-grid" style="margin-bottom:20px">
-      ${[['Total Users',s.total_users||0],['Active Premium',s.active_premium||0],['Total Attempts',s.total_attempts||0],['Total Questions',s.total_questions||0]].map(([l,v])=>`
-      <div class="stat-card"><div class="stat-val" style="color:var(--c-blue)">${v}</div><div class="stat-lbl">${l}</div></div>`).join('')}
-    </div>
-    <div class="card"><div class="card-body">
-      <div style="font-size:12px;font-weight:800;color:var(--c-text);margin-bottom:8px">Quick Actions</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" onclick="_aSwitch('questions')">Add Text Question</button>
-        <button class="btn btn-primary btn-sm" onclick="_aSwitch('image-q')">Add Image Question</button>
-        <button class="btn btn-secondary btn-sm" onclick="_aSwitch('exams')">Manage Exams</button>
-        <button class="btn btn-secondary btn-sm" onclick="_aSwitch('news')">Post News</button>
+/* ═══════════════════════════════════════════════════════════════════
+   UPLOAD QUESTIONS — smart wizard
+   ═══════════════════════════════════════════════════════════════════ */
+function _aUpload(el) {
+  el.innerHTML = `<div>
+    <div style="font-size:14px;font-weight:800;color:var(--c-text);margin-bottom:4px">Upload Questions</div>
+    <div style="font-size:12px;color:var(--c-text3);margin-bottom:16px">Select destination, then add questions one by one.</div>
+
+    <!-- STEP 1: Choose destination -->
+    <div class="card" style="margin-bottom:14px"><div class="card-body">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--c-text4);margin-bottom:12px">Step 1 — Choose Destination</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px" id="dest-tabs">
+        ${['PYQ','DPP','Chapterwise Test','Mock Test'].map((t,i)=>
+          `<button class="pill-tab ${i===0?'active':''}" onclick="_destTab('${t}')" id="dtab-${t.replace(' ','-')}">${t}</button>`
+        ).join('')}
       </div>
-    </div></div>`;
+      <div id="dest-form"></div>
+    </div></div>
+
+    <!-- STEP 2: Question form (shown after destination selected) -->
+    <div id="qform-wrap" style="display:none"></div>
+  </div>`;
+  _destTab('PYQ');
 }
 
-// ── Add text question ────────────────────────────────────────────────────────
-function _aAddQ(el) {
-  el.innerHTML = `<div class="card"><div class="card-body">
-    <div style="font-size:13px;font-weight:800;margin-bottom:16px;color:var(--c-text)">Add Text Question</div>
-    <div id="aq-err" style="display:none;background:var(--c-red-l);color:var(--c-red);padding:8px 12px;border-radius:var(--radius-sm);font-size:12px;margin-bottom:12px;border-left:3px solid var(--c-red)"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="form-label">Place in</label>
-        <select id="aq-ctype" class="form-control">
-          <option value="shift_id">PYQ Shift</option><option value="dpp_id">DPP</option>
-          <option value="module_id">Module</option><option value="mock_test_id">Mock Test</option>
-        </select></div>
-      <div class="form-group"><label class="form-label">ID (from structure)</label><input id="aq-cid" type="number" class="form-control" placeholder="e.g. 1"></div>
-      <div class="form-group"><label class="form-label">Subject</label>
-        <select id="aq-subj" class="form-control"><option>PHYSICS</option><option>CHEMISTRY</option><option>MATHS</option><option>BIOLOGY</option></select></div>
-      <div class="form-group"><label class="form-label">Question Type</label>
-        <select id="aq-qtype" class="form-control" onchange="_aqTypeChange()">
-          <option>MCQ_SINGLE</option><option>MCQ_MULTIPLE</option><option>NUMERICAL</option></select></div>
-      <div class="form-group"><label class="form-label">Question Number</label><input id="aq-qnum" type="number" class="form-control" value="1"></div>
-      <div class="form-group"><label class="form-label">Topic (optional)</label><input id="aq-topic" class="form-control" placeholder="e.g. Kinematics"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Question Text</label>
-      <textarea id="aq-qtext" class="form-control" rows="4" placeholder="Type the full question here. HTML tags like <b>, <sup>, <sub> are supported."></textarea></div>
-    <div id="aq-opts">
+window._destTab = function(tab) {
+  document.querySelectorAll('[id^="dtab-"]').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('dtab-' + tab.replace(' ','-'));
+  if (btn) btn.classList.add('active');
+
+  const df = document.getElementById('dest-form'); if (!df) return;
+  document.getElementById('qform-wrap').style.display = 'none';
+
+  if (tab === 'PYQ') {
+    const exams = window._adminData.exams || [];
+    df.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Exam</label>
+          <select id="pyq-exam" class="form-control" onchange="_pyqExamChange()">
+            <option value="">-- Select Exam --</option>
+            ${exams.map(e=>`<option value="${e.id}" data-type="${e.type}">${e.display_name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Year</label>
+          <select id="pyq-year" class="form-control" onchange="_pyqYearChange()">
+            <option value="">-- Select Year --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Shift / Paper</label>
+          <select id="pyq-shift" class="form-control">
+            <option value="">-- Select Shift --</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div class="form-group" style="flex:1;margin:0">
+          <label class="form-label">Add new Shift (optional)</label>
+          <input id="pyq-new-shift" class="form-control" placeholder="e.g. Apr 25 Shift 1 or Re-Exam">
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="_addShift()">Add Shift</button>
+        <button class="btn btn-primary btn-sm" onclick="_pyqConfirm()">Use This Shift</button>
+      </div>`;
+  }
+  else if (tab === 'DPP') {
+    const subjs = window._adminData.subjects || [];
+    df.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Subject</label>
+          <select id="dpp-subj" class="form-control" onchange="_dppSubjChange()">
+            <option value="">-- Select Subject --</option>
+            ${subjs.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${s.name} (${_trackName(s.id)})</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">DPP Set</label>
+          <select id="dpp-set" class="form-control" onchange="_dppSetChange()">
+            <option value="">-- Select Set --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">DPP (Chapter)</label>
+          <select id="dpp-id" class="form-control">
+            <option value="">-- Select DPP --</option>
+          </select>
+        </div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="form-group"><label class="form-label">Option A</label><input id="aq-a" class="form-control"></div>
-        <div class="form-group"><label class="form-label">Option B</label><input id="aq-b" class="form-control"></div>
-        <div class="form-group"><label class="form-label">Option C</label><input id="aq-c" class="form-control"></div>
-        <div class="form-group"><label class="form-label">Option D</label><input id="aq-d" class="form-control"></div>
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <div class="form-group" style="flex:1;margin:0">
+            <label class="form-label">Create new DPP Set</label>
+            <input id="dpp-new-set" class="form-control" placeholder="Set name e.g. Set 4">
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="_createDppSet()">Create</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <div class="form-group" style="flex:1;margin:0">
+            <label class="form-label">Create new DPP</label>
+            <input id="dpp-new-name" class="form-control" placeholder="DPP title / chapter name">
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="_createDpp()">Create</button>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="_dppConfirm()">Use This DPP</button>`;
+  }
+  else if (tab === 'Chapterwise Test') {
+    const subjs = window._adminData.subjects || [];
+    df.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Subject</label>
+          <select id="ct-subj" class="form-control" onchange="_ctSubjChange()">
+            <option value="">-- Select Subject --</option>
+            ${subjs.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${s.name} (${_trackName(s.id)})</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Chapter</label>
+          <select id="ct-chapter" class="form-control" onchange="_ctChapterChange()">
+            <option value="">-- Select Chapter --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Module</label>
+          <select id="ct-module" class="form-control">
+            <option value="">-- Select Module --</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <div class="form-group" style="flex:1;margin:0">
+            <label class="form-label">Add Chapter</label>
+            <input id="ct-new-ch" class="form-control" placeholder="Chapter name e.g. Kinematics">
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="_addChapter()">Add</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <div class="form-group" style="flex:1;margin:0">
+            <label class="form-label">Add Module</label>
+            <input id="ct-new-mod" class="form-control" placeholder="Module name e.g. Module 4">
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="_addModule()">Add</button>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="_ctConfirm()">Use This Module</button>`;
+  }
+  else if (tab === 'Mock Test') {
+    const subjs = window._adminData.subjects || [];
+    df.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Subject</label>
+          <select id="mt-subj" class="form-control" onchange="_mtSubjChange()">
+            <option value="">-- Select Subject --</option>
+            ${subjs.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${s.name} (${_trackName(s.id)})</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mock Test</label>
+          <select id="mt-id" class="form-control">
+            <option value="">-- Select Mock Test --</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div class="form-group" style="flex:1;margin:0">
+          <label class="form-label">Create new Mock Test</label>
+          <input id="mt-new-name" class="form-control" placeholder="e.g. Full Syllabus Mock Test 4">
+        </div>
+        <input id="mt-new-dur" type="number" class="form-control" style="width:90px" value="180" placeholder="min">
+        <button class="btn btn-secondary btn-sm" onclick="_createMock()">Create</button>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="_mtConfirm()">Use This Mock Test</button>`;
+  }
+};
+
+// ── Helper: track name for subject ────────────────────────────────────────────
+function _trackName(subjId) {
+  const tracks = window._adminData.tracks || [];
+  for (const t of tracks) for (const s of t.subjects) if (s.id == subjId) return t.display_name;
+  return '';
+}
+
+// ── PYQ selectors ─────────────────────────────────────────────────────────────
+window._pyqExamChange = async function() {
+  const examId = document.getElementById('pyq-exam').value;
+  if (!examId) return;
+  const exams = window._adminData.exams || [];
+  const exam  = exams.find(e => e.id == examId);
+  const sel   = document.getElementById('pyq-year');
+  sel.innerHTML = '<option value="">-- Select Year --</option>'
+    + (exam?.years||[]).sort((a,b)=>b.year-a.year).map(y=>`<option value="${y.id}">${y.year}</option>`).join('');
+  document.getElementById('pyq-shift').innerHTML = '<option value="">-- Select Shift --</option>';
+};
+
+window._pyqYearChange = function() {
+  const yearId = document.getElementById('pyq-year').value;
+  if (!yearId) return;
+  const exams  = window._adminData.exams || [];
+  for (const e of exams) {
+    const y = e.years.find(y => y.id == yearId);
+    if (y) {
+      document.getElementById('pyq-shift').innerHTML = '<option value="">-- Select Shift --</option>'
+        + y.shifts.map(s=>`<option value="${s.id}">${s.label}${s.exam_date?' ('+s.exam_date+')':''}</option>`).join('');
+      return;
+    }
+  }
+};
+
+window._addShift = async function() {
+  const yearId = document.getElementById('pyq-year').value;
+  const label  = document.getElementById('pyq-new-shift').value.trim();
+  if (!yearId || !label) { toast('Select year and enter shift name','warn'); return; }
+  try {
+    const fd = new FormData(); fd.append('year_id',yearId); fd.append('label',label);
+    const r  = await FORM('/api/admin/shifts', fd);
+    toast(`Shift "${label}" created (ID: ${r.id})`,'ok');
+    document.getElementById('pyq-new-shift').value = '';
+    await _adminLoadAll();
+    _pyqYearChange();
+  } catch(e) { toast('Error: '+e.message,'err'); }
+};
+
+window._pyqConfirm = function() {
+  const shiftId = document.getElementById('pyq-shift').value;
+  const shiftEl = document.getElementById('pyq-shift');
+  const label   = shiftEl.options[shiftEl.selectedIndex]?.text || '';
+  if (!shiftId) { toast('Select a shift first','warn'); return; }
+  _showQForm({ shift_id: parseInt(shiftId), label: 'PYQ — ' + label });
+};
+
+// ── DPP selectors ─────────────────────────────────────────────────────────────
+window._dppSubjChange = async function() {
+  const subjId = document.getElementById('dpp-subj').value; if (!subjId) return;
+  try {
+    const tracks = window._adminData.tracks||[];
+    let sets = [];
+    for (const t of tracks) for (const s of t.subjects) if (s.id==subjId) sets = s.dpp_sets||[];
+    const sel = document.getElementById('dpp-set');
+    sel.innerHTML = '<option value="">-- Select Set --</option>' + sets.map(ds=>`<option value="${ds.id}">${ds.name} (${ds.questions_per_dpp}Q/DPP)</option>`).join('');
+    document.getElementById('dpp-id').innerHTML = '<option value="">-- Select DPP --</option>';
+    window._adminData._curDppSets = sets;
+  } catch(e) {}
+};
+
+window._dppSetChange = function() {
+  const setId = document.getElementById('dpp-set').value; if (!setId) return;
+  const sets  = window._adminData._curDppSets || [];
+  const set   = sets.find(s=>s.id==setId);
+  const dpps  = set?.dpps||[];
+  document.getElementById('dpp-id').innerHTML = '<option value="">-- Select DPP --</option>'
+    + dpps.sort((a,b)=>a.order_index-b.order_index).map(d=>`<option value="${d.id}">${d.title}</option>`).join('');
+};
+
+window._createDppSet = async function() {
+  const subjId = document.getElementById('dpp-subj').value;
+  const name   = document.getElementById('dpp-new-set').value.trim();
+  if (!subjId||!name) { toast('Select subject and enter set name','warn'); return; }
+  try {
+    const fd=new FormData(); fd.append('subject_id',subjId); fd.append('name',name); fd.append('questions_per_dpp','10');
+    const r=await FORM('/api/admin/premium/dpp-sets',fd);
+    toast(`DPP Set "${name}" created`,'ok');
+    document.getElementById('dpp-new-set').value='';
+    await _adminLoadAll(); _dppSubjChange();
+  } catch(e) { toast(e.message,'err'); }
+};
+
+window._createDpp = async function() {
+  const setId = document.getElementById('dpp-set').value;
+  const title = document.getElementById('dpp-new-name').value.trim();
+  if (!setId||!title) { toast('Select set and enter DPP name','warn'); return; }
+  try {
+    const fd=new FormData(); fd.append('dpp_set_id',setId); fd.append('title',title); fd.append('chapter_name',title); fd.append('order_index','99'); fd.append('duration_minutes','30');
+    const r=await FORM('/api/admin/premium/dpps',fd);
+    toast(`DPP "${title}" created`,'ok');
+    document.getElementById('dpp-new-name').value='';
+    await _adminLoadAll(); _dppSubjChange();
+    setTimeout(()=>{document.getElementById('dpp-set').value=setId;_dppSetChange();},200);
+  } catch(e) { toast(e.message,'err'); }
+};
+
+window._dppConfirm = function() {
+  const dppId = document.getElementById('dpp-id').value;
+  const dppEl = document.getElementById('dpp-id');
+  if (!dppId) { toast('Select a DPP','warn'); return; }
+  _showQForm({ dpp_id: parseInt(dppId), label: 'DPP — ' + dppEl.options[dppEl.selectedIndex]?.text });
+};
+
+// ── Chapterwise Test selectors ─────────────────────────────────────────────────
+window._ctSubjChange = async function() {
+  const subjId = document.getElementById('ct-subj').value; if (!subjId) return;
+  try {
+    const tracks = window._adminData.tracks||[];
+    let testSets = [];
+    for (const t of tracks) for (const s of t.subjects) if (s.id==subjId) testSets = s.test_sets||[];
+    // Flatten all chapters across all test sets
+    let allChapters = [];
+    for (const ts of testSets) {
+      const chs = ts.chapters||[];
+      allChapters = allChapters.concat(chs.map(ch=>({...ch,setName:ts.name})));
+    }
+    window._adminData._curChapters = allChapters;
+    window._adminData._curTestSets = testSets;
+    document.getElementById('ct-chapter').innerHTML = '<option value="">-- Select Chapter --</option>'
+      + allChapters.map(ch=>`<option value="${ch.id}">${ch.name}</option>`).join('');
+    document.getElementById('ct-module').innerHTML = '<option value="">-- Select Module --</option>';
+    // Store for "add chapter" — use first test set
+    window._adminData._ctSubjId = subjId;
+    window._adminData._ctFirstSetId = testSets[0]?.id;
+  } catch(e) {}
+};
+
+window._ctChapterChange = function() {
+  const chId = document.getElementById('ct-chapter').value; if (!chId) return;
+  const chs  = window._adminData._curChapters||[];
+  const ch   = chs.find(c=>c.id==chId);
+  const mods = ch?.modules||[];
+  document.getElementById('ct-module').innerHTML = '<option value="">-- Select Module --</option>'
+    + mods.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+};
+
+window._addChapter = async function() {
+  const name   = document.getElementById('ct-new-ch').value.trim();
+  const setId  = window._adminData._ctFirstSetId;
+  if (!name||!setId) { toast('Select subject and enter chapter name','warn'); return; }
+  try {
+    const fd=new FormData(); fd.append('test_set_id',setId); fd.append('name',name); fd.append('order_index','99');
+    await FORM('/api/admin/premium/chapters',fd);
+    toast(`Chapter "${name}" added`,'ok');
+    document.getElementById('ct-new-ch').value='';
+    await _adminLoadAll(); _ctSubjChange();
+  } catch(e) { toast(e.message,'err'); }
+};
+
+window._addModule = async function() {
+  const chId = document.getElementById('ct-chapter').value;
+  const name = document.getElementById('ct-new-mod').value.trim();
+  if (!chId||!name) { toast('Select chapter and enter module name','warn'); return; }
+  try {
+    const fd=new FormData(); fd.append('chapter_id',chId); fd.append('name',name); fd.append('order_index','99'); fd.append('duration_minutes','30');
+    await FORM('/api/admin/premium/modules',fd);
+    toast(`Module "${name}" added`,'ok');
+    document.getElementById('ct-new-mod').value='';
+    await _adminLoadAll(); _ctSubjChange();
+    setTimeout(()=>{document.getElementById('ct-chapter').value=chId;_ctChapterChange();},200);
+  } catch(e) { toast(e.message,'err'); }
+};
+
+window._ctConfirm = function() {
+  const modId = document.getElementById('ct-module').value;
+  const modEl = document.getElementById('ct-module');
+  if (!modId) { toast('Select a module','warn'); return; }
+  _showQForm({ module_id: parseInt(modId), label: 'Chapter Test — ' + modEl.options[modEl.selectedIndex]?.text });
+};
+
+// ── Mock Test selectors ───────────────────────────────────────────────────────
+window._mtSubjChange = async function() {
+  const subjId = document.getElementById('mt-subj').value; if (!subjId) return;
+  const tracks = window._adminData.tracks||[];
+  let mocks = [];
+  for (const t of tracks) for (const s of t.subjects) if (s.id==subjId) mocks = s.mock_tests||[];
+  window._adminData._mtSubjId = subjId;
+  document.getElementById('mt-id').innerHTML = '<option value="">-- Select Mock Test --</option>'
+    + mocks.map(m=>`<option value="${m.id}">${m.title}</option>`).join('');
+};
+
+window._createMock = async function() {
+  const subjId = document.getElementById('mt-subj').value;
+  const title  = document.getElementById('mt-new-name').value.trim();
+  const dur    = parseInt(document.getElementById('mt-new-dur').value)||180;
+  if (!subjId||!title) { toast('Select subject and enter mock test name','warn'); return; }
+  try {
+    const fd=new FormData(); fd.append('subject_id',subjId); fd.append('title',title); fd.append('duration_minutes',dur); fd.append('order_index','99');
+    const r=await FORM('/api/admin/premium/mock-tests',fd);
+    toast(`Mock Test "${title}" created`,'ok');
+    document.getElementById('mt-new-name').value='';
+    await _adminLoadAll(); _mtSubjChange();
+  } catch(e) { toast(e.message,'err'); }
+};
+
+window._mtConfirm = function() {
+  const mtId = document.getElementById('mt-id').value;
+  const mtEl = document.getElementById('mt-id');
+  if (!mtId) { toast('Select a mock test','warn'); return; }
+  _showQForm({ mock_test_id: parseInt(mtId), label: 'Mock Test — ' + mtEl.options[mtEl.selectedIndex]?.text });
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  QUESTION FORM — rich editor with text+LaTeX+image per field
+// ═══════════════════════════════════════════════════════════════════
+let _qDest = null; // { shift_id|dpp_id|module_id|mock_test_id, label }
+let _qNum  = 1;
+let _uploadedImgs = {}; // { field: path }
+
+function _showQForm(dest) {
+  _qDest = dest; _qNum = 1; _uploadedImgs = {};
+  const wrap = document.getElementById('qform-wrap'); if (!wrap) return;
+  wrap.style.display = 'block';
+  wrap.innerHTML = `<div class="card"><div class="card-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:13px;font-weight:800;color:var(--c-text)">Add Questions</div>
+        <div style="font-size:11px;color:var(--c-blue);font-weight:600;margin-top:2px">Destination: ${dest.label}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:12px;color:var(--c-text3)">Q Number:</span>
+        <input id="q-num" type="number" class="form-control" style="width:70px" value="${_qNum}">
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="form-label">Correct Answer</label>
-        <input id="aq-ans" class="form-control" placeholder="A or A,C or 12.5 (numerical)"></div>
-      <div class="form-group"><label class="form-label">Marks: +correct / −wrong</label>
-        <div style="display:flex;gap:6px">
-          <input id="aq-mc" type="number" class="form-control" value="4" step=".5">
-          <input id="aq-mw" type="number" class="form-control" value="-1" step=".5">
-        </div></div>
+    <div id="aq-err" style="display:none;background:var(--c-red-l);color:var(--c-red);padding:8px 12px;border-radius:var(--radius-sm);font-size:12px;margin-bottom:12px;border-left:3px solid var(--c-red)"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Subject</label>
+        <select id="aq-subj" class="form-control"><option>PHYSICS</option><option>CHEMISTRY</option><option>MATHS</option><option>BIOLOGY</option></select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Question Type</label>
+        <select id="aq-type" class="form-control" onchange="_aqTypeChange()"><option value="MCQ_SINGLE">MCQ — Single Correct</option><option value="MCQ_MULTIPLE">MCQ — Multiple Correct</option><option value="NUMERICAL">Numerical / Integer</option></select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div class="form-group" style="margin:0"><label class="form-label">+Marks</label><input id="aq-mc" type="number" class="form-control" value="4" step=".5"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">−Marks</label><input id="aq-mw" type="number" class="form-control" value="-1" step=".5"></div>
+      </div>
     </div>
-    <div class="form-group"><label class="form-label">Solution Explanation</label>
-      <textarea id="aq-sol" class="form-control" rows="3" placeholder="Step by step explanation..."></textarea></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-primary" onclick="_aqSubmit()">Add Question</button>
+
+    <!-- Question text + image -->
+    ${_richField('aq-qtext','Question','aq-qimg','question image (formula, diagram etc.)')}
+
+    <!-- Options (hidden for numerical) -->
+    <div id="aq-opts-wrap">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--c-text4);margin-bottom:8px">Options — Text supports LaTeX: use ^{x} for superscript, _{x} for subscript</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${['A','B','C','D'].map(k=>_richField('aq-opt'+k,'Option '+k,'aq-img'+k,'image for option '+k,true)).join('')}
+      </div>
+    </div>
+
+    <!-- Correct answer -->
+    <div class="form-group">
+      <label class="form-label">Correct Answer <span style="color:var(--c-text4)">(MCQ: A / A,C  |  Numerical: 12.5)</span></label>
+      <input id="aq-ans" class="form-control" placeholder="A  or  A,C  or  12.5">
+    </div>
+
+    <!-- Solution -->
+    ${_richField('aq-sol','Solution Explanation (optional)','aq-simg','solution image',false,true)}
+
+    <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+      <button class="btn btn-primary" onclick="_aqSubmit()">Add Question &amp; Next</button>
       <button class="btn btn-secondary" onclick="_aqClear()">Clear Form</button>
+      <div id="aq-ok" style="display:none;font-size:12px;font-weight:600;color:var(--c-green)"></div>
     </div>
-    <div id="aq-success" style="display:none;margin-top:10px;padding:8px 12px;background:var(--c-green-l);color:var(--c-green);border-radius:var(--radius-sm);font-size:12px;font-weight:600;border-left:3px solid var(--c-green)"></div>
   </div></div>`;
 }
 
-function _aqTypeChange() {
-  const t = document.getElementById('aq-qtype')?.value;
-  const s = document.getElementById('aq-opts'); if(s) s.style.display = t==='NUMERICAL'?'none':'';
+function _richField(textId, label, imgId, imgHint, compact=false, optional=false) {
+  return `<div class="form-group" style="${compact?'margin-bottom:8px':''}">
+    <label class="form-label">${label}${optional?' <span style="color:var(--c-text4)">(optional)</span>':''}</label>
+    <div style="display:flex;gap:6px;align-items:flex-start">
+      <textarea id="${textId}" class="form-control" rows="${compact?2:3}" placeholder="Type here. LaTeX: ^{superscript} _{subscript}. HTML ok: &lt;sup&gt;&lt;sub&gt;&lt;b&gt;" style="flex:1;resize:vertical"></textarea>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        <label style="display:flex;align-items:center;gap:4px;padding:5px 8px;background:var(--c-surface2);border:1px solid var(--c-border);border-radius:var(--radius-sm);cursor:pointer;font-size:11px;font-weight:600;color:var(--c-text3);white-space:nowrap">
+          <input type="file" accept="image/*" id="${imgId}-file" style="display:none" onchange="_fieldImgPreview('${imgId}')">
+          Img
+        </label>
+        <div id="${imgId}-preview" style="width:48px;height:36px;border-radius:4px;overflow:hidden;border:1px solid var(--c-border);display:none;background:var(--c-surface2)"></div>
+      </div>
+    </div>
+    <div id="${imgId}-path" style="display:none;font-size:10px;color:var(--c-green);margin-top:3px;font-weight:600"></div>
+  </div>`;
 }
+
+window._fieldImgPreview = async function(fieldId) {
+  const file = document.getElementById(fieldId+'-file').files[0]; if (!file) return;
+  // Show preview immediately
+  const reader = new FileReader();
+  reader.onload = e => {
+    const p = document.getElementById(fieldId+'-preview');
+    if (p) { p.style.display='block'; p.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`; }
+  };
+  reader.readAsDataURL(file);
+  // Upload
+  try {
+    const fd = new FormData(); fd.append('file', file);
+    const r  = await FORM('/api/admin/upload/image', fd);
+    _uploadedImgs[fieldId] = r.path;
+    const pathEl = document.getElementById(fieldId+'-path');
+    if (pathEl) { pathEl.textContent = 'Uploaded: ' + r.path.split('/').pop(); pathEl.style.display='block'; }
+    toast('Image uploaded','ok',2000);
+  } catch(e) {
+    toast('Upload failed: ' + (e.message||e),'err');
+    console.error('Upload error:', e);
+  }
+};
+
+window._aqTypeChange = function() {
+  const t = document.getElementById('aq-type')?.value;
+  const w = document.getElementById('aq-opts-wrap');
+  if (w) w.style.display = t==='NUMERICAL' ? 'none' : '';
+};
 
 async function _aqSubmit() {
   const err = document.getElementById('aq-err');
-  const ok  = document.getElementById('aq-success');
-  err.style.display='none'; ok.style.display='none';
-  const ct  = document.getElementById('aq-ctype').value;
-  const cid = parseInt(document.getElementById('aq-cid').value);
-  const ans = document.getElementById('aq-ans').value.trim();
-  if (!cid) { err.textContent='Container ID required'; err.style.display='block'; return; }
-  if (!ans) { err.textContent='Correct answer required'; err.style.display='block'; return; }
+  const ok  = document.getElementById('aq-ok');
+  if (err) { err.style.display='none'; err.textContent=''; }
+  if (ok)  { ok.style.display='none'; }
+
+  const dest   = _qDest;
+  const ans    = (document.getElementById('aq-ans')?.value||'').trim();
+  const qtype  = document.getElementById('aq-type')?.value;
+  const qtext  = document.getElementById('aq-qtext')?.value||'';
+  const qnum   = parseInt(document.getElementById('q-num')?.value)||_qNum;
+
+  if (!dest) { if(err){err.textContent='No destination selected'; err.style.display='block';} return; }
+  if (!ans)  { if(err){err.textContent='Correct answer is required'; err.style.display='block';} return; }
+  if (!qtext && !_uploadedImgs['aq-qimg']) { if(err){err.textContent='Question text or image required'; err.style.display='block';} return; }
+
+  // Build payload
   const payload = {
-    [ct]: cid,
-    subject: document.getElementById('aq-subj').value,
-    question_type: document.getElementById('aq-qtype').value,
-    question_number: parseInt(document.getElementById('aq-qnum').value)||1,
-    question_format: 'TEXT',
-    question_text: document.getElementById('aq-qtext').value||null,
-    option_a: document.getElementById('aq-a')?.value||null,
-    option_b: document.getElementById('aq-b')?.value||null,
-    option_c: document.getElementById('aq-c')?.value||null,
-    option_d: document.getElementById('aq-d')?.value||null,
-    correct_answer: ans,
-    marks_correct: parseFloat(document.getElementById('aq-mc').value)||4,
-    marks_incorrect: parseFloat(document.getElementById('aq-mw').value)||-1,
-    solution_format: 'TEXT',
-    solution_text: document.getElementById('aq-sol').value||null,
-    topic: document.getElementById('aq-topic').value||null,
+    ...dest,
+    label: undefined, // remove label from payload
+    subject:         document.getElementById('aq-subj')?.value || 'PHYSICS',
+    question_type:   qtype,
+    question_number: qnum,
+    question_format: _uploadedImgs['aq-qimg'] && !qtext ? 'IMAGE' : 'TEXT',
+    question_text:   qtext || null,
+    question_image_path: _uploadedImgs['aq-qimg'] || null,
+    option_a: document.getElementById('aq-optA')?.value || null,
+    option_b: document.getElementById('aq-optB')?.value || null,
+    option_c: document.getElementById('aq-optC')?.value || null,
+    option_d: document.getElementById('aq-optD')?.value || null,
+    options_image_path: _uploadedImgs['aq-imgA'] || _uploadedImgs['aq-imgB'] || null,
+    correct_answer:  ans,
+    marks_correct:   parseFloat(document.getElementById('aq-mc')?.value)||4,
+    marks_incorrect: parseFloat(document.getElementById('aq-mw')?.value)||-1,
+    solution_format: _uploadedImgs['aq-simg'] && !(document.getElementById('aq-sol')?.value) ? 'IMAGE' : 'TEXT',
+    solution_text:   document.getElementById('aq-sol')?.value || null,
+    solution_image_path: _uploadedImgs['aq-simg'] || null,
   };
-  try {
-    const r = await POST('/api/admin/questions', payload);
-    ok.textContent=`Question #${r.id} added successfully. Q${parseInt(document.getElementById('aq-qnum').value)+1} is ready.`;
-    ok.style.display='block';
-    document.getElementById('aq-qnum').value = parseInt(document.getElementById('aq-qnum').value)+1;
-    ['aq-qtext','aq-a','aq-b','aq-c','aq-d','aq-ans','aq-sol'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  } catch(e) { err.textContent=e.message; err.style.display='block'; }
-}
-
-function _aqClear() {
-  ['aq-qtext','aq-a','aq-b','aq-c','aq-d','aq-ans','aq-sol','aq-topic'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-}
-
-// ── Add image question ───────────────────────────────────────────────────────
-function _aImageQ(el) {
-  el.innerHTML = `<div class="card"><div class="card-body">
-    <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:var(--c-text)">Add Image-Based Question</div>
-    <div style="font-size:12px;color:var(--c-text3);margin-bottom:16px">Upload the question image and/or solution image. The PDF export will embed the image directly.</div>
-    <div id="iq-err" style="display:none;background:var(--c-red-l);color:var(--c-red);padding:8px 12px;border-radius:var(--radius-sm);font-size:12px;margin-bottom:12px;border-left:3px solid var(--c-red)"></div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="form-label">Container Type</label>
-        <select id="iq-ctype" class="form-control"><option value="shift_id">PYQ Shift</option><option value="dpp_id">DPP</option><option value="module_id">Module</option><option value="mock_test_id">Mock Test</option></select></div>
-      <div class="form-group"><label class="form-label">Container ID</label><input id="iq-cid" type="number" class="form-control" placeholder="e.g. 1"></div>
-      <div class="form-group"><label class="form-label">Subject</label>
-        <select id="iq-subj" class="form-control"><option>PHYSICS</option><option>CHEMISTRY</option><option>MATHS</option><option>BIOLOGY</option></select></div>
-      <div class="form-group"><label class="form-label">Question Type</label>
-        <select id="iq-qtype" class="form-control"><option>MCQ_SINGLE</option><option>MCQ_MULTIPLE</option><option>NUMERICAL</option></select></div>
-      <div class="form-group"><label class="form-label">Q Number</label><input id="iq-qnum" type="number" class="form-control" value="1"></div>
-      <div class="form-group"><label class="form-label">Correct Answer</label><input id="iq-ans" class="form-control" placeholder="A or A,C or 12.5"></div>
-      <div class="form-group"><label class="form-label">+Marks</label><input id="iq-mc" type="number" class="form-control" value="4" step=".5"></div>
-      <div class="form-group"><label class="form-label">−Marks</label><input id="iq-mw" type="number" class="form-control" value="-1" step=".5"></div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:6px">
-      <div>
-        <div style="font-size:12px;font-weight:700;color:var(--c-text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Question Image</div>
-        <div id="qimg-drop" onclick="document.getElementById('qimg-file').click()" style="border:2px dashed var(--c-border);border-radius:var(--radius);padding:24px;text-align:center;cursor:pointer;transition:all .15s;background:var(--c-surface2)" onmouseover="this.style.borderColor='var(--c-blue)'" onmouseout="this.style.borderColor='var(--c-border)'">
-          <div style="font-size:11px;color:var(--c-text4)">Click to upload question image<br><span style="font-size:10px">JPG, PNG, WebP — max 5MB</span></div>
-          <div id="qimg-preview" style="margin-top:10px"></div>
-        </div>
-        <input id="qimg-file" type="file" accept="image/*" style="display:none" onchange="_previewImg('qimg','qimg-preview')">
-        <input id="qimg-path" type="text" class="form-control" style="margin-top:6px;font-size:11px" placeholder="Or paste existing path">
-      </div>
-      <div>
-        <div style="font-size:12px;font-weight:700;color:var(--c-text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Solution Image (optional)</div>
-        <div id="simg-drop" onclick="document.getElementById('simg-file').click()" style="border:2px dashed var(--c-border);border-radius:var(--radius);padding:24px;text-align:center;cursor:pointer;transition:all .15s;background:var(--c-surface2)" onmouseover="this.style.borderColor='var(--c-blue)'" onmouseout="this.style.borderColor='var(--c-border)'">
-          <div style="font-size:11px;color:var(--c-text4)">Click to upload solution image<br><span style="font-size:10px">JPG, PNG — max 5MB</span></div>
-          <div id="simg-preview" style="margin-top:10px"></div>
-        </div>
-        <input id="simg-file" type="file" accept="image/*" style="display:none" onchange="_previewImg('simg','simg-preview')">
-        <input id="simg-path" type="text" class="form-control" style="margin-top:6px;font-size:11px" placeholder="Or paste existing path">
-        <div class="form-group" style="margin-top:8px"><label class="form-label">Solution Text (optional)</label><textarea id="iq-sol" class="form-control" rows="2" placeholder="Additional text explanation"></textarea></div>
-      </div>
-    </div>
-
-    <div style="margin-top:16px;display:flex;gap:8px">
-      <button class="btn btn-primary" onclick="_iqSubmit()">Upload & Add Question</button>
-    </div>
-    <div id="iq-success" style="display:none;margin-top:10px;padding:8px 12px;background:var(--c-green-l);color:var(--c-green);border-radius:var(--radius-sm);font-size:12px;font-weight:600;border-left:3px solid var(--c-green)"></div>
-  </div></div>`;
-}
-
-function _previewImg(prefix, previewId) {
-  const file = document.getElementById(prefix+'-file').files[0];
-  if (!file) return;
-  const preview = document.getElementById(previewId);
-  const reader  = new FileReader();
-  reader.onload = e => {
-    preview.innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:150px;border-radius:6px;margin-top:6px;object-fit:contain">`;
-  };
-  reader.readAsDataURL(file);
-}
-
-async function _iqSubmit() {
-  const err = document.getElementById('iq-err');
-  const ok  = document.getElementById('iq-success');
-  err.style.display='none'; ok.style.display='none';
-
-  const cid = parseInt(document.getElementById('iq-cid').value);
-  const ans = document.getElementById('iq-ans').value.trim();
-  if (!cid) { err.textContent='Container ID required'; err.style.display='block'; return; }
-  if (!ans) { err.textContent='Correct answer required'; err.style.display='block'; return; }
-
-  // Upload question image if selected
-  let qImgPath = document.getElementById('qimg-path').value.trim() || null;
-  const qImgFile = document.getElementById('qimg-file').files[0];
-  if (qImgFile) {
-    try {
-      const fd = new FormData(); fd.append('file', qImgFile);
-      const r = await FORM('/api/admin/upload/image', fd);
-      qImgPath = r.path;
-    } catch(e) { err.textContent='Image upload failed: '+e.message; err.style.display='block'; return; }
-  }
-
-  // Upload solution image if selected
-  let sImgPath = document.getElementById('simg-path').value.trim() || null;
-  const sImgFile = document.getElementById('simg-file').files[0];
-  if (sImgFile) {
-    try {
-      const fd = new FormData(); fd.append('file', sImgFile);
-      const r = await FORM('/api/admin/upload/image', fd);
-      sImgPath = r.path;
-    } catch {}
-  }
-
-  const ct = document.getElementById('iq-ctype').value;
-  const payload = {
-    [ct]: cid,
-    subject: document.getElementById('iq-subj').value,
-    question_type: document.getElementById('iq-qtype').value,
-    question_number: parseInt(document.getElementById('iq-qnum').value)||1,
-    question_format: qImgPath ? 'IMAGE' : 'TEXT',
-    question_image_path: qImgPath,
-    correct_answer: ans,
-    marks_correct: parseFloat(document.getElementById('iq-mc').value)||4,
-    marks_incorrect: parseFloat(document.getElementById('iq-mw').value)||-1,
-    solution_format: sImgPath ? 'IMAGE' : 'TEXT',
-    solution_image_path: sImgPath,
-    solution_text: document.getElementById('iq-sol').value||null,
-  };
+  // Remove label key
+  delete payload.label;
 
   try {
     const r = await POST('/api/admin/questions', payload);
-    ok.textContent = `Question #${r.id} with image added successfully.`;
-    ok.style.display = 'block';
-    document.getElementById('iq-qnum').value = parseInt(document.getElementById('iq-qnum').value)+1;
-    document.getElementById('qimg-path').value='';
-    document.getElementById('simg-path').value='';
-    document.getElementById('qimg-preview').innerHTML='';
-    document.getElementById('simg-preview').innerHTML='';
-    document.getElementById('iq-sol').value='';
-    document.getElementById('qimg-file').value='';
-    document.getElementById('simg-file').value='';
-  } catch(e) { err.textContent=e.message; err.style.display='block'; }
+    _qNum = qnum + 1;
+    if (document.getElementById('q-num')) document.getElementById('q-num').value = _qNum;
+    if (ok) { ok.textContent=`Q${qnum} added (ID ${r.id}). Ready for Q${_qNum}.`; ok.style.display='block'; }
+    _uploadedImgs = {};
+    _aqClear(false);
+  } catch(e) {
+    if (err) { err.textContent=e.message; err.style.display='block'; }
+  }
 }
 
-// ── Exam structure ───────────────────────────────────────────────────────────
-function _aExams(el) {
+function _aqClear(clearDest=true) {
+  ['aq-qtext','aq-optA','aq-optB','aq-optC','aq-optD','aq-ans','aq-sol'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  ['aq-qimg','aq-imgA','aq-imgB','aq-imgC','aq-imgD','aq-simg'].forEach(id=>{
+    const p=document.getElementById(id+'-preview'); if(p){p.style.display='none';p.innerHTML='';}
+    const pt=document.getElementById(id+'-path'); if(pt){pt.style.display='none';pt.textContent='';}
+    const f=document.getElementById(id+'-file'); if(f) f.value='';
+  });
+  _uploadedImgs = {};
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EXAM STRUCTURE
+   ═══════════════════════════════════════════════════════════════════ */
+function _aStructure(el) {
   el.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px">
-    ${[
-      ['Create Exam', 'ex', [['type','Exam Type (JEE_MAIN/JEE_ADVANCED/NEET)'],['display_name','Display Name e.g. JEE Main']], 'exams'],
-      ['Create Year', 'yr', [['exam_id','Exam ID'],['year','Year e.g. 2025']], 'years'],
-      ['Create Shift','sh', [['year_id','Year ID'],['label','Shift Label e.g. Jan 25 Shift 1'],['exam_date','Date (optional) e.g. 2025-01-22']], 'shifts'],
-    ].map(([title,pfx,fields,ep])=>`
     <div class="card"><div class="card-body">
-      <div style="font-size:12px;font-weight:800;color:var(--c-text);margin-bottom:12px">${title}</div>
-      ${fields.map(([id,ph])=>`<div class="form-group"><label class="form-label">${ph}</label><input id="${pfx}-${id}" class="form-control" placeholder="${ph}"></div>`).join('')}
-      <button class="btn btn-primary btn-sm" onclick="_aFormPost('/api/admin/${ep}','${pfx}',[${fields.map(([id])=>`'${id}'`).join(',')}])">Create ${title}</button>
-      <div id="${pfx}-res" style="display:none;margin-top:8px;font-size:11px;font-weight:600;color:var(--c-green)"></div>
-    </div></div>`).join('')}
+      <div style="font-size:12px;font-weight:800;color:var(--c-text);margin-bottom:12px">Add Year to Existing Exam</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Exam</label>
+          <select id="str-exam" class="form-control">
+            ${(window._adminData.exams||[]).map(e=>`<option value="${e.id}">${e.display_name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Year</label>
+          <input id="str-year" type="number" class="form-control" placeholder="e.g. 2026">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="_strAddYear()">Add Year</button>
+    </div></div>
+
+    <div class="card"><div class="card-body">
+      <div style="font-size:12px;font-weight:800;color:var(--c-text);margin-bottom:12px">Add Shift / Paper to Year</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Exam</label>
+          <select id="str-sh-exam" class="form-control" onchange="_strExamYears()">
+            ${(window._adminData.exams||[]).map(e=>`<option value="${e.id}">${e.display_name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Year</label>
+          <select id="str-sh-year" class="form-control"></select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Shift Label</label>
+          <input id="str-sh-label" class="form-control" placeholder="e.g. Jan 26 Shift 1 or Re-Exam">
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:8px"><label class="form-label">Exam Date (optional)</label><input id="str-sh-date" class="form-control" placeholder="2026-01-22"></div>
+      <button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="_strAddShift()">Add Shift</button>
+    </div></div>
+
+    <div class="card"><div class="card-body">
+      <div style="font-size:12px;font-weight:800;color:var(--c-text);margin-bottom:12px">Create New Exam (if needed)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Type</label>
+          <select id="str-etype" class="form-control"><option value="JEE_MAIN">JEE Main</option><option value="JEE_ADVANCED">JEE Advanced</option><option value="NEET">NEET UG</option></select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Display Name</label>
+          <input id="str-ename" class="form-control" placeholder="e.g. NEET UG 2026">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="_strAddExam()">Create Exam</button>
+    </div></div>
   </div>`;
+  setTimeout(_strExamYears, 100);
 }
 
-async function _aFormPost(url, pfx, fields) {
-  const fd = new FormData();
-  fields.forEach(f => { const el=document.getElementById(`${pfx}-${f}`); if(el&&el.value) fd.append(f,el.value); });
-  const res = document.getElementById(`${pfx}-res`);
-  try {
-    const r = await FORM(url, fd);
-    toast(`Created (ID: ${r.id})`,'ok');
-    if(res){res.textContent=`Created successfully — ID: ${r.id}`;res.style.display='block';}
-  } catch(e) { toast(e.message,'err'); }
-}
+window._strExamYears = function() {
+  const examId = document.getElementById('str-sh-exam')?.value;
+  const exam   = (window._adminData.exams||[]).find(e=>e.id==examId);
+  const sel    = document.getElementById('str-sh-year'); if(!sel) return;
+  sel.innerHTML = (exam?.years||[]).sort((a,b)=>b.year-a.year).map(y=>`<option value="${y.id}">${y.year}</option>`).join('');
+};
 
-// ── Premium structure ─────────────────────────────────────────────────────────
-function _aPremium(el) {
-  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">
-    <div style="font-size:12px;color:var(--c-text3);margin-bottom:4px;padding:10px 14px;background:var(--c-blue-l);border-radius:var(--radius-sm);border:1px solid var(--c-blue-m)">Build the hierarchy: Track → Subject → {DPP Set → DPP} or {Test Set → Chapter → Module} or Mock Test</div>
+window._strAddYear = async function() {
+  const examId=document.getElementById('str-exam').value, year=document.getElementById('str-year').value;
+  if(!examId||!year){toast('Fill all fields','warn');return;}
+  try { const fd=new FormData();fd.append('exam_id',examId);fd.append('year',year); const r=await FORM('/api/admin/years',fd); toast(`Year ${year} added (ID:${r.id})`,'ok'); await _adminLoadAll(); _aStructure(document.getElementById('admin-body')); } catch(e){toast(e.message,'err');}
+};
+
+window._strAddShift = async function() {
+  const yearId=document.getElementById('str-sh-year').value, label=document.getElementById('str-sh-label').value.trim(), date=document.getElementById('str-sh-date').value;
+  if(!yearId||!label){toast('Fill all fields','warn');return;}
+  try { const fd=new FormData();fd.append('year_id',yearId);fd.append('label',label);if(date)fd.append('exam_date',date); const r=await FORM('/api/admin/shifts',fd); toast(`Shift "${label}" added (ID:${r.id})`,'ok'); document.getElementById('str-sh-label').value=''; await _adminLoadAll(); } catch(e){toast(e.message,'err');}
+};
+
+window._strAddExam = async function() {
+  const type=document.getElementById('str-etype').value, name=document.getElementById('str-ename').value.trim();
+  if(!name){toast('Enter display name','warn');return;}
+  try { const fd=new FormData();fd.append('type',type);fd.append('display_name',name); const r=await FORM('/api/admin/exams',fd); toast(`Exam created (ID:${r.id})`,'ok'); await _adminLoadAll(); _aStructure(document.getElementById('admin-body')); } catch(e){toast(e.message,'err');}
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   PREMIUM STRUCTURE (simplified)
+   ═══════════════════════════════════════════════════════════════════ */
+function _aPremStruct(el) {
+  const subjs = window._adminData.subjects||[];
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px">
+    <div style="padding:10px 14px;background:var(--c-blue-l);border-radius:var(--radius-sm);font-size:12px;color:var(--c-blue);font-weight:600;border:1px solid var(--c-blue-m)">
+      Tip: Most structure is already created. Use the Upload Questions section to add questions via DPP / Chapterwise / Mock Test selectors. Create new items here only when needed.
+    </div>
     ${[
-      ['Track','track',[['name','Name: ENGINEERING or NEET'],['display_name','Display Name']],'tracks'],
-      ['Subject','subj',[['track_id','Track ID'],['name','PHYSICS/CHEMISTRY/MATHS/BIOLOGY'],['is_active','true or false']],'subjects'],
-      ['DPP Set','dset',[['subject_id','Subject ID'],['name','Set Name'],['questions_per_dpp','Questions per DPP']],'dpp-sets'],
-      ['DPP','dpp',[['dpp_set_id','DPP Set ID'],['title','DPP Title'],['chapter_name','Chapter'],['order_index','Order'],['duration_minutes','Duration (min)']],'dpps'],
-      ['Test Set','tset',[['subject_id','Subject ID'],['name','Set Name']],'test-sets'],
-      ['Chapter','chap',[['test_set_id','Test Set ID'],['name','Chapter Name'],['order_index','Order']],'chapters'],
-      ['Module','mod',[['chapter_id','Chapter ID'],['name','Module Name'],['order_index','Order'],['duration_minutes','Duration (min)']],'modules'],
-      ['Mock Test','mock',[['subject_id','Subject ID'],['title','Mock Test Title'],['duration_minutes','Duration (min)'],['order_index','Order']],'mock-tests'],
-    ].map(([title,pfx,fields,ep])=>`
+      ['Add DPP Set',['subject_id:Subject ID (number)','name:Set Name e.g. Set 4','questions_per_dpp:Questions per DPP'],'dpp-sets'],
+      ['Add DPP',['dpp_set_id:DPP Set ID','title:DPP Title','chapter_name:Chapter','order_index:Order','duration_minutes:Duration (min)'],'dpps'],
+      ['Add Test Set',['subject_id:Subject ID','name:Set Name'],'test-sets'],
+      ['Add Chapter',['test_set_id:Test Set ID','name:Chapter Name','order_index:Order'],'chapters'],
+      ['Add Module',['chapter_id:Chapter ID','name:Module Name','order_index:Order','duration_minutes:Duration min'],'modules'],
+      ['Add Mock Test',['subject_id:Subject ID','title:Title','duration_minutes:Duration','order_index:Order'],'mock-tests'],
+    ].map(([title,fields,ep])=>`
     <details style="border:1px solid var(--c-border);border-radius:var(--radius);overflow:hidden">
-      <summary style="padding:10px 14px;font-size:12px;font-weight:700;cursor:pointer;background:var(--c-surface2);user-select:none">Add ${title}</summary>
+      <summary style="padding:10px 14px;font-size:12px;font-weight:700;cursor:pointer;background:var(--c-surface2);user-select:none">${title}</summary>
       <div style="padding:14px">
-        ${fields.map(([id,ph])=>`<div class="form-group"><label class="form-label">${ph}</label><input id="${pfx}-${id}" class="form-control" placeholder="${ph}"></div>`).join('')}
-        <button class="btn btn-primary btn-sm" onclick="_aFormPost('/api/admin/premium/${ep}','${pfx}',[${fields.map(([id])=>`'${id}'`).join(',')}])">Create ${title}</button>
+        ${fields.map(f=>{const[id,ph]=f.split(':');return`<div class="form-group"><label class="form-label">${ph}</label><input id="ps-${ep}-${id}" class="form-control" placeholder="${ph}"></div>`;}).join('')}
+        <button class="btn btn-primary btn-sm" onclick="_psCreate('/api/admin/premium/${ep}','${ep}',[${fields.map(f=>`'${f.split(':')[0]}'`).join(',')}])">Create ${title}</button>
+        <div id="ps-${ep}-res" style="display:none;margin-top:8px;font-size:11px;color:var(--c-green);font-weight:600"></div>
       </div>
     </details>`).join('')}
+    <div style="margin-top:4px;padding:10px 14px;background:var(--c-surface2);border-radius:var(--radius-sm);font-size:11px;color:var(--c-text4)">
+      Subject IDs: ${subjs.map(s=>`${s.id}=${s.name}`).join(', ')}
+    </div>
   </div>`;
 }
 
-// ── Media upload ─────────────────────────────────────────────────────────────
+window._psCreate = async function(url, ep, fields) {
+  const fd=new FormData();
+  fields.forEach(f=>{const el=document.getElementById(`ps-${ep}-${f}`);if(el&&el.value)fd.append(f,el.value);});
+  const res=document.getElementById(`ps-${ep}-res`);
+  try { const r=await FORM(url,fd); toast(`Created (ID:${r.id})`,'ok'); if(res){res.textContent=`Created — ID: ${r.id}`;res.style.display='block';} await _adminLoadAll(); } catch(e){toast(e.message,'err');}
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   MEDIA UPLOAD
+   ═══════════════════════════════════════════════════════════════════ */
 function _aMedia(el) {
-  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:14px">
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px">
     <div class="card"><div class="card-body">
-      <div style="font-size:12px;font-weight:800;margin-bottom:4px;color:var(--c-text)">Upload Image</div>
-      <div style="font-size:11px;color:var(--c-text4);margin-bottom:12px">Upload question/solution images. The path returned can be pasted into question forms.</div>
-      <input id="mi-file" type="file" accept="image/*" class="form-control" style="margin-bottom:10px">
-      <button class="btn btn-primary btn-sm" onclick="_doUpload('mi-file','/api/admin/upload/image','mi-res')">Upload Image</button>
+      <div style="font-size:12px;font-weight:800;color:var(--c-text);margin-bottom:4px">Upload Image</div>
+      <div style="font-size:11px;color:var(--c-text4);margin-bottom:10px">Copy the path returned and paste into question forms.</div>
+      <input id="mi-file" type="file" accept="image/*" class="form-control" style="margin-bottom:8px">
+      <button class="btn btn-primary btn-sm" onclick="_doUpload('mi-file','/api/admin/upload/image','mi-res')">Upload</button>
       <div id="mi-res" style="display:none;margin-top:8px;font-size:11px;font-weight:600;padding:8px 12px;background:var(--c-green-l);color:var(--c-green);border-radius:var(--radius-sm)"></div>
     </div></div>
     <div class="card"><div class="card-body">
-      <div style="font-size:12px;font-weight:800;margin-bottom:4px;color:var(--c-text)">Upload PDF</div>
-      <div style="font-size:11px;color:var(--c-text4);margin-bottom:12px">Upload solution PDFs for reference.</div>
-      <input id="mp-file" type="file" accept="application/pdf" class="form-control" style="margin-bottom:10px">
-      <button class="btn btn-primary btn-sm" onclick="_doUpload('mp-file','/api/admin/upload/pdf','mp-res')">Upload PDF</button>
+      <div style="font-size:12px;font-weight:800;color:var(--c-text);margin-bottom:4px">Upload PDF</div>
+      <input id="mp-file" type="file" accept="application/pdf" class="form-control" style="margin-bottom:8px">
+      <button class="btn btn-primary btn-sm" onclick="_doUpload('mp-file','/api/admin/upload/pdf','mp-res')">Upload</button>
       <div id="mp-res" style="display:none;margin-top:8px;font-size:11px;font-weight:600;padding:8px 12px;background:var(--c-green-l);color:var(--c-green);border-radius:var(--radius-sm)"></div>
     </div></div>
   </div>`;
 }
 
-async function _doUpload(fileId, url, resId) {
-  const file = document.getElementById(fileId).files[0];
-  if (!file) { toast('Select a file first','warn'); return; }
-  const fd = new FormData(); fd.append('file', file);
-  const res = document.getElementById(resId);
-  try {
-    const r = await FORM(url, fd);
-    res.textContent = `Uploaded: ${r.path}  (copied to clipboard)`;
-    res.style.display = 'block';
-    navigator.clipboard?.writeText(r.path).catch(()=>{});
-    toast('Uploaded — path copied to clipboard','ok');
-  } catch(e) { toast(e.message,'err'); }
-}
+window._doUpload = async function(fileId, url, resId) {
+  const file=document.getElementById(fileId).files[0]; if(!file){toast('Select a file first','warn');return;}
+  const fd=new FormData(); fd.append('file',file);
+  const res=document.getElementById(resId);
+  try { const r=await FORM(url,fd); if(res){res.textContent=`Path: ${r.path}  (copied to clipboard)`;res.style.display='block';} navigator.clipboard?.writeText(r.path).catch(()=>{}); toast('Uploaded — path copied','ok'); } catch(e){toast('Upload failed: '+(e.message||JSON.stringify(e)),'err');}
+};
 
-// ── News ──────────────────────────────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════════════
+   NEWS
+   ═══════════════════════════════════════════════════════════════════ */
 function _aNews(el) {
-  el.innerHTML = `<div class="card"><div class="card-body">
-    <div style="font-size:12px;font-weight:800;margin-bottom:14px;color:var(--c-text)">Post Exam News / Update</div>
-    <div class="form-group"><label class="form-label">Headline</label><input id="an-title" class="form-control" placeholder="e.g. JEE Main 2025 Answer Key Released"></div>
-    <div class="form-group"><label class="form-label">Exam Category</label>
-      <select id="an-exam" class="form-control"><option value="">General / All</option><option value="JEE_MAIN">JEE Main</option><option value="JEE_ADVANCED">JEE Advanced</option><option value="NEET">NEET</option></select></div>
-    <div class="form-group"><label class="form-label">News Body</label><textarea id="an-body" class="form-control" rows="5" placeholder="Full news content..."></textarea></div>
-    <button class="btn btn-primary btn-sm" onclick="_aPostNews()">Publish Now</button>
+  el.innerHTML=`<div class="card"><div class="card-body">
+    <div style="font-size:12px;font-weight:800;margin-bottom:14px;color:var(--c-text)">Post Exam News</div>
+    <div class="form-group"><label class="form-label">Headline</label><input id="an-title" class="form-control" placeholder="e.g. JEE Main 2026 Answer Key Released"></div>
+    <div class="form-group"><label class="form-label">Category</label>
+      <select id="an-exam" class="form-control"><option value="">General</option><option value="JEE_MAIN">JEE Main</option><option value="JEE_ADVANCED">JEE Advanced</option><option value="NEET">NEET</option></select></div>
+    <div class="form-group"><label class="form-label">Content</label><textarea id="an-body" class="form-control" rows="5" placeholder="Full news content..."></textarea></div>
+    <button class="btn btn-primary btn-sm" onclick="_aPostNews()">Publish</button>
   </div></div>`;
 }
 
-async function _aPostNews() {
-  const title = document.getElementById('an-title').value.trim();
-  if (!title) { toast('Headline required','warn'); return; }
-  try {
-    await POST('/api/news/', { title, body: document.getElementById('an-body').value||null, exam_type: document.getElementById('an-exam').value||null });
-    toast('News published','ok');
-    document.getElementById('an-title').value='';
-    document.getElementById('an-body').value='';
-  } catch(e) { toast(e.message,'err'); }
+window._aPostNews = async function() {
+  const title=document.getElementById('an-title').value.trim();
+  if(!title){toast('Headline required','warn');return;}
+  try { await POST('/api/news/',{title,body:document.getElementById('an-body').value||null,exam_type:document.getElementById('an-exam').value||null}); toast('Published','ok'); document.getElementById('an-title').value='';document.getElementById('an-body').value=''; } catch(e){toast(e.message,'err');}
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   STATS + USERS
+   ═══════════════════════════════════════════════════════════════════ */
+function _aStats(el) {
+  const s=window._adminData.stats||{};
+  el.innerHTML=`<div class="stat-grid">
+    ${[['Total Users',s.total_users||0,'var(--c-blue)'],['Active Premium',s.active_premium||0,'var(--c-green)'],['Total Attempts',s.total_attempts||0,'var(--c-purple)'],['Questions',s.total_questions||0,'var(--c-amber)']].map(([l,v,c])=>`
+    <div class="stat-card"><div class="stat-val" style="color:${c}">${v}</div><div class="stat-lbl">${l}</div></div>`).join('')}
+  </div>`;
 }
 
-// ── User stats ────────────────────────────────────────────────────────────────
 async function _aUsers(el) {
   el.innerHTML='<div class="loading-center"><div class="spinner"></div></div>';
   try {
-    const [overall, daily] = await Promise.all([GET('/api/leaderboard/overall?limit=20'), GET('/api/leaderboard/daily?limit=20')]);
-    el.innerHTML = `<div style="display:flex;flex-direction:column;gap:14px">
+    const [ov,da]=await Promise.all([GET('/api/leaderboard/overall?limit=20'),GET('/api/leaderboard/daily?limit=20')]);
+    el.innerHTML=`<div style="display:flex;flex-direction:column;gap:14px">
       <div class="card" style="overflow:hidden">
-        <div style="padding:12px 16px;background:var(--c-surface2);border-bottom:1px solid var(--c-border);font-size:12px;font-weight:800;color:var(--c-text)">Top Users by Performance</div>
-        <div style="overflow-x:auto"><table class="data-table">
-          <thead><tr><th>#</th><th>User</th><th>Tests</th><th>Questions</th><th>DPPs</th><th>Streak</th><th>Accuracy</th></tr></thead>
-          <tbody>${overall.map(r=>`<tr>
-            <td style="font-weight:800">${r.rank}</td>
-            <td><div style="font-weight:600;font-size:12px">${r.full_name||'—'}</div><div style="font-size:10px;color:var(--c-text4)">${r.email}</div></td>
-            <td>${r.total_tests}</td><td>${r.total_questions}</td><td>${r.total_dpps}</td>
-            <td style="color:var(--c-amber);font-weight:700">${r.streak_days}d</td>
-            <td>${r.accuracy.toFixed(1)}%</td>
-          </tr>`).join('')}</tbody>
-        </table></div>
+        <div style="padding:12px 16px;background:var(--c-surface2);border-bottom:1px solid var(--c-border);font-size:12px;font-weight:800">Top Users</div>
+        <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>#</th><th>User</th><th>Tests</th><th>Questions</th><th>Streak</th><th>Accuracy</th></tr></thead>
+        <tbody>${ov.map(r=>`<tr><td style="font-weight:800">${r.rank}</td><td><div style="font-size:12px;font-weight:600">${r.full_name||'—'}</div><div style="font-size:10px;color:var(--c-text4)">${r.email}</div></td><td>${r.total_tests}</td><td>${r.total_questions}</td><td style="color:var(--c-amber);font-weight:700">${r.streak_days}d</td><td>${r.accuracy.toFixed(1)}%</td></tr>`).join('')}</tbody></table></div>
       </div>
       <div class="card" style="overflow:hidden">
-        <div style="padding:12px 16px;background:var(--c-surface2);border-bottom:1px solid var(--c-border);font-size:12px;font-weight:800;color:var(--c-text)">Today's Activity</div>
-        <div style="overflow-x:auto"><table class="data-table">
-          <thead><tr><th>#</th><th>User</th><th>Questions Today</th><th>Score Today</th></tr></thead>
-          <tbody>${daily.map(r=>`<tr>
-            <td style="font-weight:800">${r.rank}</td>
-            <td><div style="font-weight:600;font-size:12px">${r.full_name||'—'}</div><div style="font-size:10px;color:var(--c-text4)">${r.email}</div></td>
-            <td style="font-weight:800;color:var(--c-blue)">${r.daily_questions_solved}</td>
-            <td>${r.daily_score.toFixed(1)}</td>
-          </tr>`).join('')}</tbody>
-        </table></div>
+        <div style="padding:12px 16px;background:var(--c-surface2);border-bottom:1px solid var(--c-border);font-size:12px;font-weight:800">Today's Activity</div>
+        <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>#</th><th>User</th><th>Questions</th><th>Score</th></tr></thead>
+        <tbody>${da.map(r=>`<tr><td style="font-weight:800">${r.rank}</td><td><div style="font-size:12px;font-weight:600">${r.full_name||'—'}</div><div style="font-size:10px;color:var(--c-text4)">${r.email}</div></td><td style="font-weight:800;color:var(--c-blue)">${r.daily_questions_solved}</td><td>${r.daily_score.toFixed(1)}</td></tr>`).join('')}</tbody></table></div>
       </div>
     </div>`;
-  } catch(e) { el.innerHTML=`<div class="empty-state"><div class="empty-sub">${e.message}</div></div>`; }
+  } catch(e){el.innerHTML=`<div class="empty-state"><div class="empty-sub">${e.message}</div></div>`;}
 }
