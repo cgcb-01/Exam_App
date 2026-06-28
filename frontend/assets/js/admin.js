@@ -1,7 +1,5 @@
 'use strict';
-/* ════════════════════════════════════════════════════════════════════
-   ADMIN PANEL
-   ════════════════════════════════════════════════════════════════════ */
+/* ADMIN PANEL*/
 
 let AD={exams:[],tracks:[],subjects:[],loaded:false};
 
@@ -64,9 +62,7 @@ function _adLoad$(k){
   ({upload:_adUpload,dpp:_adDpp,chap:_adChap,mock:_adMock,pyq:_adPyq,media:_adMedia,news:_adNews,stats:_adStats,users:_adUsers}[k]||_adStats)(b);
 }
 
-/* ═══════════════════════════════════════════════════════════
-   UPLOAD QUESTIONS
-   ═══════════════════════════════════════════════════════════ */
+/*UPLOAD QUESTIONS */
 let _dest=null,_qNum=1,_imgs={};
 
 function _adUpload(el){
@@ -361,9 +357,7 @@ function _qfClr(){
   _imgs={};
 }
 
-/* ═══════════════════════════════════════════════════════════
-   DPP MANAGER TAB
-   ═══════════════════════════════════════════════════════════ */
+/* DPP MANAGER TAB */
 function _adDpp(el){
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">
     ${AD.tracks.map(trk=>`
@@ -410,9 +404,7 @@ window._qdDpp=async function(ssid,iid){
   catch(e){toast(e.message,'err');}
 };
 
-/* ═══════════════════════════════════════════════════════════
-   CHAPTERWISE MANAGER TAB
-   ═══════════════════════════════════════════════════════════ */
+/* CHAPTERWISE MANAGER TAB*/
 function _adChap(el){
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">
     ${AD.tracks.map(trk=>`
@@ -459,9 +451,7 @@ window._qMod=async function(ssid,iid){
   catch(e){toast(e.message,'err');}
 };
 
-/* ═══════════════════════════════════════════════════════════
-   MOCK TESTS MANAGER TAB
-   ═══════════════════════════════════════════════════════════ */
+/* MOCK TESTS MANAGER TAB*/
 function _adMock(el){
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">
     ${AD.tracks.map(trk=>`
@@ -491,9 +481,7 @@ window._qMt=async function(sid,tid,did){
   catch(e){toast(e.message,'err');}
 };
 
-/* ═══════════════════════════════════════════════════════════
-   PYQ STRUCTURE
-   ═══════════════════════════════════════════════════════════ */
+/* PYQ STRUCTURE */
 function _adPyq(el){
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">
     <div class="card"><div class="card-body">
@@ -549,9 +537,7 @@ window._ps2ExCh=function(){const id=document.getElementById('ps2-ex')?.value,e=A
 window._psAddShift=async function(){const yid=document.getElementById('ps2-yr').value,lbl=document.getElementById('ps2-lbl').value.trim();if(!yid||!lbl){toast('Fill all','warn');return;}const fd=new FormData();fd.append('year_id',yid);fd.append('label',lbl);try{await _uploadFetch('/api/admin/shifts',fd);toast('Shift added','ok');document.getElementById('ps2-lbl').value='';await _adLoad();_adPyq(document.getElementById('admin-body'));}catch(e){toast(e.message,'err');}};
 window._psCreateExam=async function(){const t=document.getElementById('ps3-t').value,n=document.getElementById('ps3-n').value.trim();if(!n){toast('Enter name','warn');return;}const fd=new FormData();fd.append('type',t);fd.append('display_name',n);try{await _uploadFetch('/api/admin/exams',fd);toast('Exam created','ok');await _adLoad();_adPyq(document.getElementById('admin-body'));}catch(e){toast(e.message,'err');}};
 
-/* ═══════════════════════════════════════════════════════════
-   MEDIA UPLOAD
-   ═══════════════════════════════════════════════════════════ */
+/* MEDIA UPLOAD */
 function _adMedia(el){
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">
     <div class="card"><div class="card-body">
