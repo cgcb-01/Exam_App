@@ -111,9 +111,11 @@ class LocalStorageStub:
             p.unlink()
         return True
 
-    exam_pdf_key    = staticmethod(B2Storage.exam_pdf_key.__func__)  
-    user_photo_key  = staticmethod(B2Storage.user_photo_key.__func__) 
-    solution_video_key = staticmethod(B2Storage.solution_video_key.__func__)
+    # Fix: Use staticmethod correctly without __func__
+    exam_pdf_key = staticmethod(B2Storage.exam_pdf_key)
+    user_photo_key = staticmethod(B2Storage.user_photo_key)
+    solution_video_key = staticmethod(B2Storage.solution_video_key)
+
 
 def get_storage():
     if settings.b2_application_key_id and B2_AVAILABLE:

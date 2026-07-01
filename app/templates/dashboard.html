@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard{% endblock %}
+{% block topbar_title %} My Dashboard{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.css">
+{% endblock %}
+
+{% block content %}
+
+<!-- -- Profile Card -- -->
+<div class="profile-card mb-24">
+  <div class="profile-avatar-wrap">
+    {% if profile and profile.photo_url %}
+      <img class="profile-avatar" src="{{ profile.photo_url }}" alt="Photo">
+    {% else %}
+      <div class="profile-avatar-placeholder">
+        {{ (profile.name[0] if profile and profile.name else '?') | upper }}
+      </div>
+    {% endif %}
+    <span class="profile-online online-dot" title="{% if profile and profile.is_online %}Online{% else %}Offline{% endif %}"
+      style="{% if not (profile and profile.is_online) %}background:var(--text-muted);{% endif %}"></span>
+  </div>
+
+  <div class="profile-info">
+    <div class="profile-level" style="color:{{ profile.rating_color if profile else '#9E9E9E' }};">
+      {{ profile.rating_level if profile else 'Unrated' }}
+    </div>
+
+    <div class="profile-name">{{ profile.name if profile else user.email if user else 'User' }}</div>
+
+    <div class="profile-rating" style="color:{{ profile.rating_color if profile else '#9E9E9E' }};">
+       {{ profile.rating if profile else 0 }}
+    </div>
+
+    <div class="profile-meta">
+      {% if profile %}
+        <span>{{ profile.school_name or 'School not set' }}</span>
+        <span>{{ profile.state or '--' }}, {{ profile.country or 'India' }}</span>
+        <span>{{ profile.student_class or 'N/A' }} · {{ profile.stream or 'N/A' }}</span>
+      {% endif %}
+    </div>
+
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span class="profile-roll">{{ user.roll_no if user else 'N/A' }}</span>
+      <span class="text-muted text-xs">Joined {{ user.created_at.strftime('%b %Y') if user and user.created_at else 'N/A' }}</span>
+      {% if user and user.is_premium %}
+        <span class="badge badge-purple">Premium</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:8px;min-width:160px;">
+    <form method="POST" action="/auth/update-profile" style="display:flex;flex-direction:column;gap:6px;">
+      <input type="hidden" name="name" value="{{ profile.name if profile else '' }}">
+      <input type="hidden" name="school_name" value="{{ profile.school_name if profile else '' }}">
+      <input type="hidden" name="state" value="{{ profile.state if profile else '' }}">
+      <input type="hidden" name="country" value="{{ profile.country if profile else 'India' }}">
+      <select name="student_class" style="font-size:.8rem;padding:6px 10px;">
+        {% if class_options %}
+          {% for c in class_options %}
+          <option value="{{ c }}" {% if profile and profile.student_class == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        {% endif %}
+      </select>
+      <select name="stream" style="font-size:.8rem;padding:6px 10px;">
+        {% if stream_options %}
+          {% for s in stream_options %}
+          <option value="{{ s }}" {% if profile and profile.stream == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        {% endif %}
+      </select>
+      <button type="submit" class="btn btn-secondary btn-sm">Update Class/Stream</button>
+    </form>
+    <a href="/dashboard/edit" class="btn btn-ghost btn-sm text-center">Edit Full Profile</a>
+  </div>
+</div>
+
+<!-- -- Stats Grid -- -->
+<div class="stat-grid mb-24">
+  <div class="stat-card">
+    <div class="stat-value">{{ profile.sheets_solved if profile else 0 }}</div>
+    <div class="stat-label">Sheets Solved</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ profile.tests_given if profile else 0 }}</div>
+    <div class="stat-label">Tests Given</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ '%.1f' | format(profile.accuracy if profile else 0) }}%</div>
+    <div class="stat-label">Accuracy</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--warning);">{{ profile.current_streak if profile else 0 }}</div>
+    <div class="stat-label">Current Streak</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ profile.max_streak if profile else 0 }}</div>
+    <div class="stat-label">Max Streak</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ profile.dpps_attempted if profile else 0 }}</div>
+    <div class="stat-label">DPPs Attempted</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ profile.pyqs_solved if profile else 0 }}</div>
+    <div class="stat-label">PYQs Solved</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ profile.max_submissions_day if profile else 0 }}</div>
+    <div class="stat-label">Max Submissions/Day</div>
+  </div>
+</div>
+
+<!-- -- Rating Graph + Friends -- -->
+<div class="grid-2 mb-24" style="grid-template-columns:2fr 1fr;gap:20px;">
+
+  <div class="rating-graph-wrap">
+    <div class="card-title">Rating History</div>
+    <div style="height:200px;position:relative;">
+      <canvas id="rating-graph"
+        data-labels='{{ rating_labels|tojson|safe if rating_labels else "[]" }}'
+        data-values='{{ rating_values|tojson|safe if rating_values else "[]" }}'
+        data-sources='{{ rating_sources|tojson|safe if rating_sources else "[]" }}'
+        style="height:200px;">
+      </canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Friends ({{ friends|length if friends else 0 }})</div>
+    {% if friends %}
+    <div class="friends-list">
+      {% for f in friends[:8] %}
+      <div class="friend-item">
+        <div class="friend-avatar">
+          {{ f.user_id[0] if f.user_id else '?' }}
+        </div>
+        <div>
+          <div style="font-size:.85rem;font-weight:600;">{{ f.user_id[:8] if f.user_id else 'Unknown' }}…</div>
+          <div class="text-xs text-muted">{{ f.status if f.status else 'Friend' }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-muted text-sm text-center" style="padding:20px 0;">No friends yet.<br>Search by roll number.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- -- Activity Heatmap -- -->
+<div class="heatmap-wrap mb-24">
+  <div class="card-title">Activity (Last 365 Days)</div>
+  <div id="activity-heatmap" data-heatmap='{{ heatmap_data|tojson|safe if heatmap_data else "{}" }}'>
+    <div class="heatmap-months" id="heatmap-months"></div>
+    <div class="heatmap-grid" id="heatmap-grid"></div>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:.72rem;color:var(--text-muted);">
+      Less
+      <div style="width:12px;height:12px;border-radius:2px;background:var(--bg-elevated);border:1px solid var(--border);"></div>
+      <div style="width:12px;height:12px;border-radius:2px;background:#0e4429;"></div>
+      <div style="width:12px;height:12px;border-radius:2px;background:#006d32;"></div>
+      <div style="width:12px;height:12px;border-radius:2px;background:#26a641;"></div>
+      <div style="width:12px;height:12px;border-radius:2px;background:#39d353;"></div>
+      More
+    </div>
+  </div>
+</div>
+
+<!-- -- Private: Weak/Strong (visible only to owner) -- -->
+{% if profile and (profile.strong_subjects or profile.weak_subjects or profile.weak_chapters) %}
+<div class="card mb-24">
+  <div class="card-title">Private Insights (Only You Can See)</div>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;">
+    {% if profile.strong_subjects %}
+      {% for s in profile.strong_subjects.split(',') %}
+        <span class="subject-tag subject-strong">{{ s.strip() }}</span>
+      {% endfor %}
+    {% endif %}
+    {% if profile.weak_subjects %}
+      {% for s in profile.weak_subjects.split(',') %}
+        <span class="subject-tag subject-weak">{{ s.strip() }}</span>
+      {% endfor %}
+    {% endif %}
+  </div>
+  {% if profile.weak_chapters %}
+  <div style="margin-top:10px;font-size:.82rem;color:var(--text-muted);">
+    Weak Chapters: {{ profile.weak_chapters }}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Heatmap legend level colours -->
+<style>
+[data-level="1"]{background:#0e4429}[data-level="2"]{background:#006d32}
+[data-level="3"]{background:#26a641}[data-level="4"]{background:#39d353}
+[data-theme="light"] [data-level="1"]{background:#9be9a8}
+[data-theme="light"] [data-level="2"]{background:#40c463}
+[data-theme="light"] [data-level="3"]{background:#30a14e}
+[data-theme="light"] [data-level="4"]{background:#216e39}
+</style>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/js/dashboard_charts.js"></script>
+{% endblock %}

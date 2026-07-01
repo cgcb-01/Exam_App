@@ -13,13 +13,6 @@ except ImportError:
 
 
 class Settings(BaseSettings):
-    if HAS_PYDANTIC_SETTINGS:
-        model_config = SettingsConfigDict(
-            env_file=".env",
-            env_file_encoding="utf-8",
-            case_sensitive=False,
-        )
-
     # ── App ──────────────────────────────────────────────────────
     app_secret_key: str = "dev_secret_change_me"
     app_name: str = "AIC Prep Platform"
@@ -63,9 +56,21 @@ class Settings(BaseSettings):
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    # ── Configuration ────────────────────────────────────────────
+    # Use ONLY this for Pydantic v2 with pydantic-settings
+    if HAS_PYDANTIC_SETTINGS:
+        model_config = SettingsConfigDict(
+            env_file=".env",
+            env_file_encoding="utf-8",
+            case_sensitive=False,
+            extra="ignore",
+        )
+    else:
+        # Fallback for Pydantic v1
+        class Config:
+            env_file = ".env"
+            case_sensitive = False
+            extra = "ignore"
 
 
 @lru_cache()

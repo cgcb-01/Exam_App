@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block topbar_title %}Announcements{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Latest Announcements</h1>
+</div>
+
+<!-- Upcoming contests strip -->
+{% if upcoming_contests %}
+<div class="card card-sm mb-16" style="background:var(--bg-elevated);border-color:var(--paic-color);">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--paic-color);">Upcoming</span>
+    {% for c in upcoming_contests %}
+    <a href="/contests" class="badge badge-orange" style="text-transform:none;font-size:.78rem;font-weight:600;padding:4px 12px;">
+      {{ c.contest_type }} #{{ c.edition_no }} — {{ c.start_time.strftime('%d %b %H:%M') }} IST
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Announcements feed -->
+<div id="ann-feed">
+{% if announcements %}
+  {% for ann in announcements %}
+  <article class="ann-card {% if ann.is_pinned %}pinned{% endif %} {% if ann.ann_type in ['CONTEST_UPCOMING','DATE_CHANGE'] %}contest{% elif ann.ann_type in ['RESULT','TOPPER'] %}result{% endif %}">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+      <span class="ann-type-tag
+        {% if ann.ann_type == 'CONTEST_UPCOMING' %}text-accent
+        {% elif ann.ann_type == 'RESULT' %}text-success
+        {% elif ann.ann_type == 'SOLUTION_RELEASE' %}text-warning
+        {% elif ann.ann_type == 'TOPPER' %}text-premium
+        {% elif ann.ann_type == 'DATE_CHANGE' %}text-danger
+        {% else %}text-muted{% endif %}">
+        {% if ann.ann_type == 'CONTEST_UPCOMING' %}UPCOMING CONTEST
+        {% elif ann.ann_type == 'RESULT' %}RESULT DECLARED
+        {% elif ann.ann_type == 'SOLUTION_RELEASE' %}SOLUTIONS OUT
+        {% elif ann.ann_type == 'TOPPER' %}TOPPERS LIST
+        {% elif ann.ann_type == 'DATE_CHANGE' %}DATE CHANGE
+        {% else %}ANNOUNCEMENT{% endif %}
+      </span>
+      {% if ann.is_pinned %}<span class="badge badge-blue" style="font-size:.62rem;">Pinned</span>{% endif %}
+    </div>
+    <div class="ann-title">{{ ann.title }}</div>
+    <div class="ann-body">{{ ann.body }}</div>
+    <div class="ann-meta">
+      {{ ann.created_at.strftime('%d %b %Y, %H:%M') }} IST
+    </div>
+  </article>
+  {% endfor %}
+{% else %}
+  <div class="card text-center" style="padding:48px 20px;">
+    <div style="font-size:3rem;margin-bottom:12px;"></div>
+    <div class="text-muted">No announcements yet. Check back soon!</div>
+  </div>
+{% endif %}
+</div>
+{% endblock %}
