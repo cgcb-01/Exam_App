@@ -1,0 +1,111 @@
+/* ================================================================
+   mobile.css — Mobile-first overrides + rotation lock UI
+================================================================ */
+
+/* ── Rotation lock overlay ────────────────────────────────────── */
+#rotate-lock {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: #0d1117;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  text-align: center;
+  padding: 32px;
+}
+
+#rotate-lock .rotate-icon {
+  font-size: 4rem;
+  animation: rotateHint 1.5s ease-in-out infinite;
+}
+
+@keyframes rotateHint {
+  0%,100% { transform: rotate(0deg); }
+  40%     { transform: rotate(-90deg); }
+  60%     { transform: rotate(-90deg); }
+}
+
+#rotate-lock p {
+  color: #e6edf3;
+  font-size: 1rem;
+  font-weight: 600;
+  max-width: 260px;
+  line-height: 1.5;
+}
+
+/* Show rotate lock on portrait mobile during exam */
+@media (max-width: 768px) and (orientation: portrait) {
+  body.exam-mode #rotate-lock { display: flex; }
+}
+
+/* ── Responsive breakpoints ───────────────────────────────────── */
+@media (max-width: 900px) {
+  .sidebar {
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .sidebar.open { transform: translateX(0); }
+
+  .main-area { margin-left: 0; }
+
+  .hamburger { display: flex; }
+
+  .page-content { padding: 16px; }
+
+  .grid-3, .grid-4 { grid-template-columns: repeat(2,1fr); }
+  .grid-2 { grid-template-columns: 1fr; }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stat-grid { grid-template-columns: repeat(2,1fr); }
+}
+
+@media (max-width: 540px) {
+  html { font-size: 14px; }
+
+  .grid-3, .grid-4, .grid-2 { grid-template-columns: 1fr; }
+
+  .stat-grid { grid-template-columns: repeat(2,1fr); }
+
+  .card-lg { padding: 16px; }
+
+  .topbar { padding: 0 14px; }
+
+  .btn-lg { padding: 10px 16px; font-size: .9rem; }
+
+  .table-wrap table { font-size: .78rem; }
+  .table-wrap th, .table-wrap td { padding: 8px 10px; }
+
+  .form-row { flex-direction: column; }
+
+  /* Stack page-header vertically on very small screens */
+  .page-header { gap: 8px; }
+  .page-title  { font-size: 1.1rem; }
+}
+
+/* ── Touch targets: min 44×44px ───────────────────────────────── */
+@media (hover: none) {
+  .btn       { min-height: 44px; }
+  .nav-btn   { min-height: 44px; }
+  input, select { min-height: 44px; }
+}
+
+/* ── Exam mode: two-pane layout adjustments ───────────────────── */
+@media (max-width: 900px) {
+  .exam-layout { flex-direction: column; }
+  .question-palette { order: -1; max-height: 160px; overflow-y: auto; }
+  .omr-panes { flex-direction: column; }
+  .omr-pane { max-height: 50dvh; overflow-y: auto; }
+}
+
+/* Horizontal scroll tables on small screens */
+@media (max-width: 600px) {
+  .leaderboard-table { font-size: .75rem; }
+}

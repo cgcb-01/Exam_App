@@ -1,0 +1,162 @@
+/* ================================================================
+   omr.css — Black-bold NEET-style OMR sheet
+================================================================ */
+
+.omr-sheet {
+  background: #fff;
+  color: #000;
+  font-family: 'Times New Roman', serif;
+  padding: 20px;
+  max-width: 640px;
+  margin: 0 auto;
+  border: 3px solid #000;
+}
+
+.omr-header {
+  background: #000;
+  color: #fff;
+  text-align: center;
+  padding: 10px;
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: .03em;
+  margin-bottom: 14px;
+}
+
+.omr-subheader {
+  display: flex;
+  justify-content: space-between;
+  font-size: .85rem;
+  font-weight: 700;
+  margin-bottom: 14px;
+  border-bottom: 2px solid #000;
+  padding-bottom: 8px;
+}
+
+.omr-roll-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  align-items: center;
+}
+
+.omr-roll-label {
+  font-weight: 900;
+  font-size: .9rem;
+  min-width: 80px;
+}
+
+.omr-roll-boxes {
+  display: flex;
+  gap: 3px;
+}
+
+.omr-roll-box {
+  width: 22px; height: 22px;
+  border: 2px solid #000;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900;
+  font-size: .75rem;
+}
+
+/* ── Question bubble grid ─────────────────────────────────────── */
+.omr-questions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 20px;
+}
+
+.omr-question-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border-bottom: 1px solid #ddd;
+}
+
+.omr-q-num {
+  font-weight: 900;
+  font-size: .78rem;
+  min-width: 28px;
+  color: #000;
+}
+
+.omr-bubbles {
+  display: flex;
+  gap: 5px;
+}
+
+/* The bubble: clickable in UI, printed as circle */
+.omr-bubble {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .65rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background .1s, color .1s;
+  user-select: none;
+  -webkit-user-select: none;
+  background: #fff;
+  color: #000;
+}
+
+.omr-bubble.filled {
+  background: #000;
+  color: #fff;
+}
+
+/* Touch: bigger tap target on mobile */
+@media (hover: none) {
+  .omr-bubble {
+    width: 32px; height: 32px;
+    font-size: .8rem;
+  }
+}
+
+.omr-divider {
+  border: none;
+  border-top: 3px solid #000;
+  margin: 10px 0;
+}
+
+/* Column header */
+.omr-col-header {
+  display: flex;
+  gap: 5px;
+  margin-left: 34px;
+  margin-bottom: 4px;
+}
+
+.omr-col-label {
+  width: 22px;
+  text-align: center;
+  font-weight: 900;
+  font-size: .7rem;
+}
+
+/* ── Panel divider (NEET two-pane drag) ───────────────────────── */
+.pane-divider {
+  width: 6px;
+  background: var(--border);
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background var(--t);
+  position: relative;
+}
+
+.pane-divider:hover,
+.pane-divider.dragging { background: var(--accent); }
+
+.pane-divider::after {
+  content: '⋮';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%);
+  color: var(--text-muted);
+  font-size: 1.2rem;
+}

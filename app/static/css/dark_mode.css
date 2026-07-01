@@ -1,0 +1,4 @@
+/* dark_mode.css — Smooth transitions when toggling theme */
+body, .sidebar, .topbar, .card, input, select, textarea, .btn, table {
+  transition: background-color .22s ease, border-color .22s ease, color .22s ease;
+}
