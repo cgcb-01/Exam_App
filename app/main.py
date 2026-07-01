@@ -1,3 +1,7 @@
+"""
+main.py — FastAPI application entry point.
+Mounts all routers, static files, Jinja2 templates, and startup tasks.
+"""
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -89,7 +93,7 @@ from app.routers import (
     auth, home, dashboard, library, exams,
     dpp, chapterwise, pyq, paic_baic, syllabus,
     calendar_routes, todo, leaderboard, admin,
-    pdf_export, information,
+    pdf_export, information, proctoring, rating,
 )
 
 app.include_router(auth.router,             prefix="/auth",        tags=["auth"])
@@ -108,6 +112,8 @@ app.include_router(leaderboard.router,      prefix="/leaderboard", tags=["leader
 app.include_router(admin.router,            prefix="/admin",       tags=["admin"])
 app.include_router(pdf_export.router,       prefix="/pdf",         tags=["pdf"])
 app.include_router(information.router,      prefix="/information", tags=["information"])
+app.include_router(proctoring.router,       prefix="/proctor",     tags=["proctoring"])
+app.include_router(rating.router,           prefix="/rating",      tags=["rating"])
 
 
 # ── Global exception handlers ────────────────────────────────────
