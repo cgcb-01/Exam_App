@@ -1,0 +1,110 @@
+<aside class="sidebar" id="sidebar">
+
+  <!-- Logo -->
+  <div class="sidebar-logo">
+    <span>AIC</span> Prep
+  </div>
+
+  <nav>
+    <ul class="sidebar-nav">
+
+      <!-- Home -->
+      <li>
+        <a href="/" title="Home">
+          <span class="nav-icon"></span> Home
+        </a>
+      </li>
+
+      <!-- My section -->
+      <li><div class="sidebar-section-label">My Space</div></li>
+      <li>
+        <a href="/dashboard" title="My Dashboard">
+          <span class="nav-icon"></span> My Dashboard
+        </a>
+      </li>
+      <li>
+        <a href="/library" title="My Library">
+          <span class="nav-icon"></span> My Library
+        </a>
+      </li>
+
+      <!-- Practice -->
+      <li><div class="sidebar-section-label">Practice</div></li>
+      <li>
+        <a href="/pyq" title="Past Year Questions">
+          <span class="nav-icon"></span> Past Year Questions
+        </a>
+      </li>
+      <li>
+        <a href="/dpp" title="Daily Practice Sheet">
+          <span class="nav-icon"></span> Daily Practice Sheet
+        </a>
+      </li>
+      <li>
+        <a href="/chapterwise" title="Chapterwise Sheets">
+          <span class="nav-icon"></span> Chapterwise Sheets
+        </a>
+      </li>
+
+      <!-- Contests -->
+      <li><div class="sidebar-section-label">Contests</div></li>
+      <li>
+        <a href="/contests?type=PAIC" title="Premium All India Contest">
+          <span class="nav-icon"></span>
+          <span>PAIC <span class="badge badge-purple" style="font-size:.58rem;padding:1px 5px;">PRO</span></span>
+        </a>
+      </li>
+      <li>
+        <a href="/contests?type=BAIC" title="Biweekly All India Contest">
+          <span class="nav-icon"></span> BAIC
+        </a>
+      </li>
+
+      <!-- Tools -->
+      <li><div class="sidebar-section-label">More</div></li>
+      <li>
+        <a href="/syllabus" title="Syllabus">
+          <span class="nav-icon"></span> Syllabus
+        </a>
+      </li>
+      <li>
+        <a href="/calendar" title="Calendar">
+          <span class="nav-icon"></span> Calendar
+        </a>
+      </li>
+      <li>
+        <a href="/todo" title="To-Do List">
+          <span class="nav-icon"></span> To-Do List
+        </a>
+      </li>
+      <li>
+        <a href="/leaderboard" title="Leaderboard">
+          <span class="nav-icon"></span> Leaderboard
+        </a>
+      </li>
+      <li>
+        <a href="/information" title="Information">
+          <span class="nav-icon"></span> Information
+        </a>
+      </li>
+
+    </ul>
+  </nav>
+
+  <!-- Bottom: dark mode + logout -->
+  <div class="sidebar-bottom">
+    <ul class="sidebar-nav">
+      <li>
+        <button class="nav-btn" onclick="window.AIC.toggleTheme()" title="Toggle dark/light">
+          <span class="nav-icon" id="theme-toggle">🌙</span> Dark Mode
+        </button>
+      </li>
+      <li>
+        <button class="nav-btn" onclick="window.AIC.logout()" title="Logout">
+          <span class="nav-icon"></span> Logout
+        </button>
+      </li>
+    </ul>
+  </div>
+
+</aside>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0d1117">
+  <title>{% block title %}AIC Prep{% endblock %} | AIC Prep Platform</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+ 
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/dark_mode.css">
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <link rel="stylesheet" href="/static/css/exam_paper.css">
+  <link rel="stylesheet" href="/static/css/omr.css">
+  <link rel="stylesheet" href="/static/css/mobile.css">
+  {% block extra_css %}{% endblock %}
+
+  <script src="/static/js/latex_render.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+<div id="rotate-lock" style="display:none;">
+  <div class="rotate-icon">📱</div>
+  <p>Please rotate your device to <strong>landscape</strong> for the best exam experience.</p>
+</div>
+<div class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<div class="app-layout">
+  {% include "partials/sidebar.html" %}
+
+  <div class="main-area">
+
+    <header class="topbar">
+      <button class="hamburger" id="hamburger-btn" aria-label="Open menu">☰</button>
+      <span class="topbar-title">{% block topbar_title %}{% endblock %}</span>
+      <div class="topbar-right">
+        {% block topbar_right %}
+          <button class="btn btn-ghost btn-sm" id="theme-toggle" onclick="window.AIC.toggleTheme()">☀️</button>
+        {% endblock %}
+      </div>
+    </header>
+
+    <!-- Page content -->
+    <main class="page-content">
+      {% block content %}{% endblock %}
+    </main>
+
+  </div>
+</div>
+<div id="toast-container"></div>
+<script src="/static/js/app.js"></script>
+<script src="/static/js/rotate_lock.js"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

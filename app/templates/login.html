@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if page == 'signup' %}Sign Up{% else %}Login{% endif %} | AIC Prep</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/mobile.css">
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100dvh; background:var(--bg); padding:20px; }
+    .auth-wrap { width:100%; max-width:440px; }
+    .auth-logo { text-align:center; margin-bottom:28px; font-size:1.6rem; font-weight:800; }
+    .auth-logo span { color:var(--accent); }
+    .auth-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--r-xl); padding:32px; }
+    .auth-tabs { display:flex; margin-bottom:24px; border-bottom:1px solid var(--border); }
+    .auth-tab { flex:1; padding:10px; text-align:center; font-weight:600; font-size:.9rem; cursor:pointer;
+                border-bottom:2.5px solid transparent; color:var(--text-muted); background:none; border-top:none; border-left:none; border-right:none; }
+    .auth-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .auth-footer { text-align:center; margin-top:16px; font-size:.82rem; color:var(--text-muted); }
+  </style>
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-logo"><span>AIC</span> Prep Platform</div>
+
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <button class="auth-tab {% if page == 'login' %}active{% endif %}" onclick="location.href='/auth/login'">Login</button>
+      <button class="auth-tab {% if page == 'signup' %}active{% endif %}" onclick="location.href='/auth/signup'">Sign Up</button>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger" style="margin-bottom:16px;">⚠️ {{ error }}</div>
+    {% endif %}
+
+    {% if page == 'login' %}
+    <!-- ── Login Form ──────────────────────────────────────── -->
+    <form method="POST" action="/auth/login">
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" name="email" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary w-full btn-lg" style="margin-top:8px;">Login →</button>
+    </form>
+
+    {% else %}
+    <!-- ── Signup Form ─────────────────────────────────────── -->
+    <form method="POST" action="/auth/signup">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" name="name" placeholder="Arjun Sharma" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" name="email" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Password <span class="text-muted text-xs">(min 8 chars)</span></label>
+        <input type="password" name="password" placeholder="••••••••" required minlength="8" autocomplete="new-password">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Class</label>
+          <select name="student_class">
+            {% for c in class_options %}
+            <option value="{{ c }}">{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Stream</label>
+          <select name="stream">
+            {% for s in stream_options %}
+            <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>School Name <span class="text-muted">(optional)</span></label>
+          <input type="text" name="school_name" placeholder="DPS, New Delhi">
+        </div>
+        <div class="form-group">
+          <label>State</label>
+          <input type="text" name="state" placeholder="West Bengal">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary w-full btn-lg" style="margin-top:8px;">Create Account →</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="auth-footer">
+    AIC Prep Platform · All rights reserved
+  </div>
+</div>
+<script src="/static/js/app.js"></script>
+</body>
+</html>
