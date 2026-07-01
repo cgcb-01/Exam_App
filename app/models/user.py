@@ -1,7 +1,3 @@
-"""
-models/user.py
-Tables: users, user_profiles, rating_history, friendships, sessions
-"""
 import uuid
 from datetime import datetime
 from sqlalchemy import (
@@ -27,8 +23,6 @@ class User(Base):
     is_active     = Column(Boolean, default=True)
     created_at    = Column(DateTime, default=datetime.utcnow)
     last_login    = Column(DateTime, nullable=True)
-
-    # ── Relations ────────────────────────────────────────────────
     profile        = relationship("UserProfile",   back_populates="user", uselist=False, cascade="all, delete-orphan")
     rating_history = relationship("RatingHistory", back_populates="user", order_by="RatingHistory.recorded_at")
     sessions       = relationship("UserSession",   back_populates="user", cascade="all, delete-orphan")
@@ -46,7 +40,7 @@ class UserProfile(Base):
     id           = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id      = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True)
     name         = Column(String(120), nullable=False)
-    photo_url    = Column(String(500), nullable=True)   # B2 URL
+    photo_url    = Column(String(500), nullable=True)   
     school_name  = Column(String(200), nullable=True)
     state        = Column(String(100), nullable=True)
     country      = Column(String(100), default="India")
@@ -56,24 +50,19 @@ class UserProfile(Base):
     rating_level = Column(String(50), default="Unrated")
     rating_color = Column(String(10), default="#9E9E9E")
 
-    # ── Public stats ─────────────────────────────────────────────
     sheets_solved      = Column(Integer, default=0)
     pyqs_solved        = Column(Integer, default=0)
     dpps_attempted     = Column(Integer, default=0)
     chapterwise_done   = Column(Integer, default=0)
     tests_given        = Column(Integer, default=0)
-    accuracy           = Column(Float,   default=0.0)  # percent
+    accuracy           = Column(Float,   default=0.0)  
     current_streak     = Column(Integer, default=0)
     max_streak         = Column(Integer, default=0)
     max_submissions_day= Column(Integer, default=0)
     is_online          = Column(Boolean, default=False)
-
-    # ── Private stats ─────────────────────────────────────────────
-    strong_subjects = Column(Text, nullable=True)  # JSON list
+    strong_subjects = Column(Text, nullable=True)  
     weak_subjects   = Column(Text, nullable=True)
     weak_chapters   = Column(Text, nullable=True)
-
-    # ── Relations ────────────────────────────────────────────────
     user = relationship("User", back_populates="profile")
 
 
@@ -83,9 +72,9 @@ class RatingHistory(Base):
     id          = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id     = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     rating      = Column(Integer, nullable=False)
-    delta       = Column(Integer, default=0)   # +/-
-    source      = Column(String(100))          # "PAIC-2024-01", "DPP", etc.
-    source_type = Column(String(30))           # "contest" | "sheet" | "decay"
+    delta       = Column(Integer, default=0)  
+    source      = Column(String(100))         
+    source_type = Column(String(30))          
     recorded_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="rating_history")
@@ -102,7 +91,6 @@ class Friendship(Base):
 
 
 class UserSession(Base):
-    """JWT refresh tokens / device sessions."""
     __tablename__ = "user_sessions"
 
     id         = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

@@ -1,7 +1,3 @@
-"""
-models/content.py
-Tables: chapters, syllabi, pyq_years, dpp_entries
-"""
 import uuid
 from datetime import datetime
 from sqlalchemy import (
@@ -32,10 +28,6 @@ class Chapter(Base):
 
 
 class SyllabusEntry(Base):
-    """
-    Maps a topic/subtopic to a chapter for the three class syllabi.
-    Admin manages these. Three separate syllabi per class.
-    """
     __tablename__ = "syllabus_entries"
 
     id          = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -52,9 +44,6 @@ class SyllabusEntry(Base):
 
 
 class PYQYear(Base):
-    """
-    Groups PYQ exams by year + stream. Admin adds new years/shifts.
-    """
     __tablename__ = "pyq_years"
 
     id       = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -66,10 +55,6 @@ class PYQYear(Base):
 
 
 class DPPEntry(Base):
-    """
-    Tracks which DPP belongs to which date and subject for the calendar view.
-    The actual exam/questions are in the Exam table.
-    """
     __tablename__ = "dpp_entries"
 
     id          = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

@@ -1,9 +1,3 @@
-"""
-models/exam.py
-Tables: exams, exam_sections, questions, question_options
-Supports all types: MCQ, MULTI, NUMERICAL, INTEGER, MATCH
-Supports all paper styles: JEE Mains, JEE Adv, NEET, DPP, Chapterwise
-"""
 import uuid
 from datetime import datetime
 from sqlalchemy import (
@@ -30,24 +24,20 @@ class Exam(Base):
     )
     stream       = Column(SAEnum("JEE","NEET","BOTH", name="stream_exam_enum"), default="BOTH")
     for_class    = Column(SAEnum("Class 11","Class 12","Dropper","ALL", name="class_exam_enum"), default="ALL")
-    subject      = Column(String(50), nullable=True)   # NULL = multi-subject
-
-    # ── Timing ───────────────────────────────────────────────────
+    subject      = Column(String(50), nullable=True)   
     duration_minutes = Column(Integer, default=180)
     start_time       = Column(DateTime, nullable=True)
     end_time         = Column(DateTime, nullable=True)
 
-    # ── Access ───────────────────────────────────────────────────
     is_premium   = Column(Boolean, default=False)
     is_active    = Column(Boolean, default=True)
     is_published = Column(Boolean, default=False)
 
-    # ── Metadata ─────────────────────────────────────────────────
     instructions     = Column(Text, nullable=True)
-    year             = Column(Integer, nullable=True)   # for PYQ
-    shift            = Column(String(20), nullable=True)# for PYQ (Morning/Afternoon)
-    paper_no         = Column(String(10), nullable=True)# JEE Adv paper 1/2
-    module_no        = Column(Integer, nullable=True)   # for chapterwise
+    year             = Column(Integer, nullable=True)  
+    shift            = Column(String(20), nullable=True)
+    paper_no         = Column(String(10), nullable=True)
+    module_no        = Column(Integer, nullable=True) 
     chapter_id       = Column(String(36), ForeignKey("chapters.id"), nullable=True)
     dpp_date         = Column(DateTime, nullable=True)
     solution_released= Column(Boolean, default=False)
@@ -56,7 +46,6 @@ class Exam(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # ── Relations ────────────────────────────────────────────────
     sections    = relationship("ExamSection", back_populates="exam",
                                order_by="ExamSection.order_index", cascade="all, delete-orphan")
     submissions = relationship("Submission", back_populates="exam")
@@ -64,10 +53,6 @@ class Exam(Base):
 
 
 class ExamSection(Base):
-    """
-    A section within an exam (e.g. Physics MCQ, Chemistry Multi-Correct).
-    Each section can have its own question type and marking scheme.
-    """
     __tablename__ = "exam_sections"
 
     id            = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -77,14 +62,12 @@ class ExamSection(Base):
                                   name="qtype_enum"), default="MCQ")
     order_index   = Column(Integer, default=0)
 
-    # ── Marking (admin-configured per section) ────────────────────
     marks_correct     = Column(Float, default=4.0)
     marks_wrong       = Column(Float, default=-1.0)
-    marks_partial     = Column(Float, default=0.0)   # MULTI partial
+    marks_partial     = Column(Float, default=0.0)  
     marks_unattempted = Column(Float, default=0.0)
 
-    # ── Attempt limits ────────────────────────────────────────────
-    max_questions_to_attempt = Column(Integer, nullable=True)  # e.g. attempt any 5 of 10
+    max_questions_to_attempt = Column(Integer, nullable=True) 
 
     exam      = relationship("Exam", back_populates="sections")
     questions = relationship("Question", back_populates="section",
@@ -98,24 +81,14 @@ class Question(Base):
     section_id    = Column(String(36), ForeignKey("exam_sections.id", ondelete="CASCADE"), index=True)
     order_index   = Column(Integer, default=0)
 
-    # ── Content (supports plain text + LaTeX + image URLs) ────────
-    # Each field stores a JSON list of content blocks:
-    # [{"type": "text", "value": "..."}, {"type": "latex", "value": "..."}, {"type": "image", "url": "..."}]
-    content       = Column(JSON, nullable=False)          # question body
-    solution      = Column(JSON, nullable=True)           # full solution
+    content       = Column(JSON, nullable=False)          
+    solution      = Column(JSON, nullable=True)       
     solution_video_url = Column(String(500), nullable=True)
 
-    # ── Answer ────────────────────────────────────────────────────
-    # MCQ/MULTI: correct option letters e.g. ["A"] or ["A","C"]
-    # NUMERICAL: float string e.g. "3.14"
-    # INTEGER:   int string  e.g. "7"
-    # MATCH:     JSON map    e.g. {"A":"P","B":"Q","C":"R"}
     correct_answer  = Column(JSON, nullable=False)
-    numerical_range = Column(JSON, nullable=True)  # {"min": x, "max": y} for range-type numerical
-
-    # ── Metadata ─────────────────────────────────────────────────
+    numerical_range = Column(JSON, nullable=True) 
     difficulty      = Column(SAEnum("Easy","Medium","Hard", name="diff_enum"), nullable=True)
-    topic_tags      = Column(JSON, nullable=True)          # ["Kinematics", "Newton's Laws"]
+    topic_tags      = Column(JSON, nullable=True)         
     is_active       = Column(Boolean, default=True)
     created_at      = Column(DateTime, default=datetime.utcnow)
     updated_at      = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -126,16 +99,11 @@ class Question(Base):
 
 
 class QuestionOption(Base):
-    """
-    Options for MCQ / MULTI / MATCH questions.
-    For MATCH: option_label = column header (e.g. "A","B" for left; "P","Q" for right).
-    """
     __tablename__ = "question_options"
 
     id           = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     question_id  = Column(String(36), ForeignKey("questions.id", ondelete="CASCADE"), index=True)
-    option_label = Column(String(5), nullable=False)   # A, B, C, D / P, Q, R, S
-    content      = Column(JSON, nullable=False)         # same block format as Question.content
-    is_correct   = Column(Boolean, default=False)       # convenience flag (also stored in Question.correct_answer)
-
+    option_label = Column(String(5), nullable=False)  
+    content      = Column(JSON, nullable=False)         
+    is_correct   = Column(Boolean, default=False)       
     question = relationship("Question", back_populates="options")

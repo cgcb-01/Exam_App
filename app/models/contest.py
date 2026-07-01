@@ -1,7 +1,3 @@
-"""
-models/contest.py
-Tables: contests (PAIC/BAIC meta), leaderboard_entries
-"""
 import uuid
 from datetime import datetime
 from sqlalchemy import (
@@ -13,16 +9,13 @@ from app.database import Base
 
 
 class Contest(Base):
-    """PAIC / BAIC meta record — links to one or more Exam rows."""
     __tablename__ = "contests"
 
     id            = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name          = Column(String(200), nullable=False)
     contest_type  = Column(SAEnum("PAIC","BAIC", name="ctype_enum"), nullable=False)
-    edition_no    = Column(Integer, default=1)           # e.g. PAIC #5
-    # One contest can have diff papers per class/stream
-    # Those Exam rows have contest_id via JSON ref in announcement
-    exam_ids      = Column(JSON, default=list)           # list of exam UUIDs
+    edition_no    = Column(Integer, default=1)           
+    exam_ids      = Column(JSON, default=list)           
     start_time    = Column(DateTime, nullable=False)
     end_time      = Column(DateTime, nullable=False)
     result_time   = Column(DateTime, nullable=True)
@@ -30,7 +23,7 @@ class Contest(Base):
     is_premium    = Column(Boolean, default=False)
     is_active     = Column(Boolean, default=True)
     announcement  = Column(String(500), nullable=True)
-    topper_list   = Column(JSON, nullable=True)          # set after result
+    topper_list   = Column(JSON, nullable=True)         
     created_at    = Column(DateTime, default=datetime.utcnow)
 
     leaderboard = relationship("LeaderboardEntry", back_populates="contest",

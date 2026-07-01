@@ -1,7 +1,3 @@
-"""
-models/misc.py
-Tables: announcements, todos, calendar_events, download_log (daily limit)
-"""
 import uuid
 from datetime import datetime, date
 from sqlalchemy import (
@@ -23,7 +19,7 @@ class Announcement(Base):
                "TOPPER","GENERAL", name="ann_type_enum"),
         default="GENERAL"
     )
-    related_id  = Column(String(36), nullable=True)    # contest_id or exam_id
+    related_id  = Column(String(36), nullable=True) 
     is_pinned   = Column(Boolean, default=False)
     is_active   = Column(Boolean, default=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
@@ -40,15 +36,14 @@ class ToDo(Base):
     due_date    = Column(Date, nullable=True)
     is_completed= Column(Boolean, default=False)
     completed_at= Column(DateTime, nullable=True)
-    completion_pct = Column(Float, default=0.0)       # 0–100
-    rating_impact  = Column(Integer, default=0)       # applied delta when evaluated
+    completion_pct = Column(Float, default=0.0)       
+    rating_impact  = Column(Integer, default=0)      
     created_at  = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="todos")
 
 
 class CalendarEvent(Base):
-    """Admin-created calendar entries — contests, DPP schedules, planning."""
     __tablename__ = "calendar_events"
 
     id          = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -68,7 +63,6 @@ class CalendarEvent(Base):
 
 
 class DailyDownloadLog(Base):
-    """Enforces max 3 downloads per user per day."""
     __tablename__ = "daily_download_logs"
 
     id          = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
